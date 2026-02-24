@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-openai = "0.29.6"
-anthropic-rs = "0.1.7"
+async-openai = "0.28.0"
+# anthropic-sdk-rust = "0.1.1"  # Requires edition 2024, incompatible with LTS Rust
 ratatui = "0.26"
 crossterm = "0.27"
 tokio = { version = "1.0", features = ["full"] }
