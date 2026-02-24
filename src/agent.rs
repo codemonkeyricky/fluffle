@@ -88,36 +88,46 @@ impl Agent {
                 return Ok(ai_response.content);
             }
 
-            // We have tool calls - continue to execution
-            break; // TODO: Remove this break after implementing tool execution loop
-        }
+            // We have tool calls - add assistant message with calls to history
+            self.conversation_history.push(
+                Message::assistant_with_tool_calls(
+                    &ai_response.content,
+                    ai_response.tool_calls.clone(),
+                )
+            );
 
-        // Temporary: keep existing behavior for now
-        Err(crate::error::Error::Ai("Iterative tool calling not fully implemented".to_string()))
+            // Execute all tool calls
+            let tool_results = self.execute_tool_calls(&ai_response.tool_calls).await?;
+
+            // Add tool results to history (including errors)
+            // Model will see errors in next iteration and decide next steps
+            for (tool_call, result) in tool_results {
+                let tool_message = if result.is_success() {
+                    Message::tool(&tool_call.id, result.output())
+                } else {
+                    Message::tool(
+                        &tool_call.id,
+                        &format!("Error: {}", result.error_message().unwrap_or("Unknown error"))
+                    )
+                };
+                self.conversation_history.push(tool_message);
+            }
+
+            // Continue to next iteration
+        }
     }
 
-    /// Execute multiple tool calls and add results to conversation history.
+    /// Execute multiple tool calls and return results.
     ///
-    /// This method executes each tool call in sequence, creates tool messages
-    /// with the results, and adds them to the conversation history.
-    /// Returns a vector of tuples containing each tool call and its result.
+    /// This method executes each tool call in sequence and returns a vector
+    /// of tuples containing each tool call and its result.
+    /// Tool messages are NOT added to conversation history; caller must add them.
     async fn execute_tool_calls(&mut self, tool_calls: &[ToolCall]) -> Result<Vec<(ToolCall, ToolResult)>> {
         let mut results = Vec::new();
 
         for tool_call in tool_calls {
             // Execute the tool
             let tool_result = self.execute_tool(tool_call).await?;
-
-            // Create tool message with result
-            let tool_message = if tool_result.is_success() {
-                Message::tool(&tool_call.id, tool_result.output())
-            } else {
-                Message::tool(&tool_call.id, &format!("Error: {}", tool_result.error_message().unwrap_or("Unknown error")))
-            };
-
-            // Add tool message to history
-            self.conversation_history.push(tool_message);
-
             results.push((tool_call.clone(), tool_result));
         }
 
