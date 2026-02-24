@@ -61,6 +61,26 @@ impl Agent {
     /// Process a user message and return the AI's response.
     /// This handles the full tool calling flow: adding user message to history,
     /// getting AI response with tools, executing tool calls, and updating history.
+    ///
+    /// The method supports iterative tool calling where the AI can make multiple
+    /// tool calls across multiple iterations until it has enough information to
+    /// provide a final response.
+    ///
+    /// # Example (conceptual)
+    ///
+    /// ```rust,ignore
+    /// // Example of iterative tool calling flow:
+    /// // 1. User: "What's the weather in Tokyo and then London?"
+    /// // 2. Model: Calls weather tool for Tokyo
+    /// // 3. Tool: Returns Tokyo weather
+    /// // 4. Model: Calls weather tool for London
+    /// // 5. Tool: Returns London weather
+    /// // 6. Model: Provides combined answer without tool calls
+    /// // 7. Loop ends, response returned to user
+    /// ```
+    ///
+    /// Tool execution errors are included in the conversation history, allowing
+    /// the AI to see and respond to errors in subsequent iterations.
     pub async fn process(&mut self, user_message: &str) -> Result<String> {
         // Add user message to conversation history
         self.conversation_history.push(Message::user(user_message));
