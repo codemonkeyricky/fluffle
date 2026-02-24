@@ -97,7 +97,7 @@ impl Agent {
             );
 
             // Execute all tool calls
-            let tool_results = self.execute_tool_calls(&ai_response.tool_calls).await?;
+            let tool_results = self.execute_tool_calls(&ai_response.tool_calls).await;
 
             // Add tool results to history (including errors)
             // Model will see errors in next iteration and decide next steps
@@ -122,16 +122,16 @@ impl Agent {
     /// This method executes each tool call in sequence and returns a vector
     /// of tuples containing each tool call and its result.
     /// Tool messages are NOT added to conversation history; caller must add them.
-    async fn execute_tool_calls(&mut self, tool_calls: &[ToolCall]) -> Result<Vec<(ToolCall, ToolResult)>> {
+    async fn execute_tool_calls(&mut self, tool_calls: &[ToolCall]) -> Vec<(ToolCall, ToolResult)> {
         let mut results = Vec::new();
 
         for tool_call in tool_calls {
             // Execute the tool
-            let tool_result = self.execute_tool(tool_call).await?;
+            let tool_result = self.execute_tool(tool_call).await;
             results.push((tool_call.clone(), tool_result));
         }
 
-        Ok(results)
+        results
     }
 
     /// Convert the agent's tools to AI tool definitions.
@@ -152,19 +152,18 @@ impl Agent {
     /// Execute a single tool call.
     ///
     /// Finds the tool by name, executes it with the provided arguments,
-    /// and returns the result. Returns `Error::ToolExecution` if the
+    /// and returns the result. Returns `ToolResult::error()` if the
     /// tool is not found.
-    async fn execute_tool(&self, tool_call: &ToolCall) -> Result<ToolResult> {
+    async fn execute_tool(&self, tool_call: &ToolCall) -> ToolResult {
         // Find the tool by name
-        let tool = self.tools.iter()
-            .find(|t| t.name() == tool_call.name)
-            .ok_or_else(|| {
-                crate::error::Error::ToolExecution(format!("Tool not found: {}", tool_call.name))
-            })?;
+        let tool = match self.tools.iter()
+            .find(|t| t.name() == tool_call.name) {
+            Some(tool) => tool,
+            None => return ToolResult::error(format!("Tool not found: {}", tool_call.name)),
+        };
 
         // Execute the tool with the provided arguments
-        let result = tool.execute(&self.context, tool_call.arguments.clone()).await;
-        Ok(result)
+        tool.execute(&self.context, tool_call.arguments.clone()).await
     }
 
     /// Get a reference to the agent's tools.
@@ -177,31 +176,6 @@ impl Agent {
         &self.conversation_history
     }
 
-    /// Check if any tool execution in the results failed.
-    fn has_tool_execution_failures(tool_results: &[(ToolCall, ToolResult)]) -> bool {
-        tool_results.iter().any(|(_, result)| !result.is_success())
-    }
-
-    /// Format the initial AI response with tool execution error messages.
-    fn format_response_with_errors(initial_response: &str, tool_results: &[(ToolCall, ToolResult)]) -> String {
-        let error_messages: Vec<String> = tool_results.iter()
-            .filter_map(|(tool_call, result)| {
-                if !result.is_success() {
-                    Some(format!("{}: {}", tool_call.name, result.error_message().unwrap_or("Unknown error")))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if error_messages.is_empty() {
-            initial_response.to_string()
-        } else {
-            format!("{} (Tool execution errors: {})",
-                initial_response,
-                error_messages.join(", "))
-        }
-    }
 
 }
 
