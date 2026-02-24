@@ -12,10 +12,10 @@ use async_openai::{
         ChatCompletionRequestUserMessageContent, ChatCompletionRequestAssistantMessageContent,
         ChatCompletionRequestToolMessageContent, ChatCompletionMessageToolCalls,
         ChatCompletionMessageToolCall, ChatCompletionTools, ChatCompletionTool,
-        ChatCompletionToolChoiceOption, ToolChoiceOptions, FunctionObject,
+        FunctionCall, FunctionObject,
     },
 };
-use serde_json::{json, Value};
+use serde_json::json;
 use async_trait::async_trait;
 
 pub struct OpenAiProvider {
@@ -45,12 +45,38 @@ impl OpenAiProvider {
                     ChatCompletionRequestMessage::User(user_message)
                 }
                 crate::ai::MessageRole::Assistant => {
+                    // Convert tool calls from our format to OpenAI's format
+                    let tool_calls = if let Some(ref tool_calls) = msg.tool_calls {
+                        Some(
+                            tool_calls
+                                .iter()
+                                .map(|tc| {
+                                    // Convert arguments Value to JSON string
+                                    let arguments = serde_json::to_string(&tc.arguments)
+                                        .unwrap_or_else(|_| "{}".to_string());
+
+                                    ChatCompletionMessageToolCalls::Function(
+                                        ChatCompletionMessageToolCall {
+                                            id: tc.id.clone(),
+                                            function: FunctionCall {
+                                                name: tc.name.clone(),
+                                                arguments,
+                                            },
+                                        },
+                                    )
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+
                     let assistant_message = ChatCompletionRequestAssistantMessage {
                         content: Some(ChatCompletionRequestAssistantMessageContent::Text(msg.content.clone())),
                         refusal: None,
                         name: None,
                         audio: None,
-                        tool_calls: None, // TODO: map tool_calls from Message
+                        tool_calls,
                         function_call: None,
                     };
                     ChatCompletionRequestMessage::Assistant(assistant_message)
