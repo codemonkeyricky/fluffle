@@ -20,12 +20,14 @@ pub struct StatusInfo {
 }
 
 /// Thread-safe shared message buffer for live UI updates
+#[derive(Clone, Debug)]
 pub struct SharedMessages {
     messages: Arc<Mutex<Vec<String>>>,
     dirty: Arc<AtomicBool>,
 }
 
 impl SharedMessages {
+    /// Creates a new empty SharedMessages buffer.
     pub fn new() -> Self {
         Self {
             messages: Arc::new(Mutex::new(Vec::new())),
@@ -33,22 +35,27 @@ impl SharedMessages {
         }
     }
 
+    /// Pushes a new message onto the buffer and marks the buffer as dirty.
+    /// Panics if the mutex is poisoned.
     pub fn push(&self, message: String) {
-        if let Ok(mut guard) = self.messages.lock() {
-            guard.push(message);
-            self.dirty.store(true, Ordering::Relaxed);
-        }
+        let mut guard = self.messages.lock().expect("mutex poisoned");
+        guard.push(message);
+        self.dirty.store(true, Ordering::Release);
     }
 
+    /// Takes all messages from the buffer, clearing it and marking it as clean.
+    /// Returns the collected messages.
+    /// Panics if the mutex is poisoned.
     pub fn take_messages(&self) -> Vec<String> {
-        self.dirty.store(false, Ordering::Relaxed);
-        self.messages.lock()
-            .map(|mut guard| std::mem::take(&mut *guard))
-            .unwrap_or_default()
+        let mut guard = self.messages.lock().expect("mutex poisoned");
+        let messages = std::mem::take(&mut *guard);
+        self.dirty.store(false, Ordering::Release);
+        messages
     }
 
+    /// Returns `true` if there are new messages since the last call to `take_messages`.
     pub fn is_dirty(&self) -> bool {
-        self.dirty.load(Ordering::Relaxed)
+        self.dirty.load(Ordering::Acquire)
     }
 }
 
