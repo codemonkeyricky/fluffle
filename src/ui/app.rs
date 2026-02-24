@@ -43,14 +43,13 @@ impl SharedMessages {
         self.dirty.store(true, Ordering::Release);
     }
 
-    /// Takes all messages from the buffer, clearing it and marking it as clean.
-    /// Returns the collected messages.
+    /// Returns all messages from the buffer without clearing it, and marks it as clean.
+    /// Returns a copy of the collected messages.
     /// Panics if the mutex is poisoned.
     pub fn take_messages(&self) -> Vec<String> {
-        let mut guard = self.messages.lock().expect("mutex poisoned");
-        let messages = std::mem::take(&mut *guard);
+        let guard = self.messages.lock().expect("mutex poisoned");
         self.dirty.store(false, Ordering::Release);
-        messages
+        guard.clone()
     }
 
     /// Returns `true` if there are new messages since the last call to `take_messages`.
@@ -126,7 +125,8 @@ mod tests {
         let messages = shared.take_messages();
         assert_eq!(messages, vec!["Test message".to_string()]);
         assert!(!shared.is_dirty());
-        assert_eq!(shared.take_messages(), Vec::<String>::new());
+        // Messages persist in buffer after taking
+        assert_eq!(shared.take_messages(), vec!["Test message".to_string()]);
     }
 
     #[test]
