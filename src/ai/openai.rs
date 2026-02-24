@@ -17,21 +17,28 @@ use async_openai::{
 };
 use serde_json::json;
 use async_trait::async_trait;
+use std::env;
 
 pub struct OpenAiProvider {
     client: async_openai::Client<OpenAIConfig>,
+    model: String,
 }
 
 impl OpenAiProvider {
     pub fn new(api_key: Option<&str>) -> Result<Self> {
-        let config = if let Some(key) = api_key {
-            OpenAIConfig::new().with_api_key(key)
-        } else {
-            OpenAIConfig::new()
-        };
+        let mut config = OpenAIConfig::new();
+
+        if let Some(key) = api_key {
+            config = config.with_api_key(key);
+        }
+
+        // Check for custom API base URL (e.g., for local LLM servers like llama.cpp)
+        if let Ok(api_base) = env::var("OPENAI_API_BASE") {
+            config = config.with_api_base(&api_base);
+        }
 
         let client = async_openai::Client::with_config(config);
-        Ok(Self { client })
+        Ok(Self { client, model: "gpt-4".to_string() })
     }
 
     fn convert_messages(messages: &[Message]) -> Vec<ChatCompletionRequestMessage> {
@@ -119,7 +126,7 @@ impl AiProvider for OpenAiProvider {
         use async_openai::types::chat::ToolChoiceOptions;
 
         let request = CreateChatCompletionRequest {
-            model: "gpt-4".to_string(), // TODO: make configurable
+            model: self.model.clone(),
             messages: Self::convert_messages(&messages),
             tools: Some(Self::convert_tools(&tools)),
             tool_choice: Some(Mode(ToolChoiceOptions::Auto)),
