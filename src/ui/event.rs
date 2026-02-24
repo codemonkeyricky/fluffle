@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent};
+use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -18,12 +18,19 @@ impl EventHandler {
         let tick_rate = Duration::from_millis(tick_rate);
 
         thread::spawn(move || loop {
-            if event::poll(tick_rate).unwrap() {
-                if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                    tx.send(Event::Key(key)).unwrap();
+            // Handle poll errors gracefully
+            match event::poll(tick_rate) {
+                Ok(true) => {
+                    if let Ok(CrosstermEvent::Key(key)) = event::read() {
+                        let _ = tx.send(Event::Key(key)); // Ignore send errors
+                    }
                 }
+                Ok(false) => {} // No event
+                Err(_) => break, // Poll error, exit thread
             }
-            tx.send(Event::Tick).unwrap();
+
+            // Send tick, ignore errors (channel may be disconnected)
+            let _ = tx.send(Event::Tick);
         });
 
         Self { rx }
