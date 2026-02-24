@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-openai = "0.28.0"
+async-openai = { version = "0.33.0", features = ["chat-completion"] }
 anthropic-sdk = "0.1.5"  # Anthropic SDK with tool calling support, edition 2021 compatible
 ratatui = "0.26"
 crossterm = "0.27"
