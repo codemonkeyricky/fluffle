@@ -3,6 +3,7 @@
 **/*.rs.bk
 # Cargo.lock - Not ignored for executables (this is a binary project)
 # See: https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
+Cargo.lock
 
 # Environment variables
 .env
