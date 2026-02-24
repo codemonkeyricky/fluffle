@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use config::{Config as ConfigBuilder, File, FileFormat, Environment};
+use config::{Config as ConfigBuilder, File, Environment};
 use serde::Deserialize;
 use std::path::PathBuf;
 

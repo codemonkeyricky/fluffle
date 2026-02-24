@@ -126,7 +126,7 @@ async fn test_agent_tool_conversion() {
         temperature: 0.7,
     };
 
-    let agent = Agent::new(config).expect("Agent initialization failed");
+    let _agent = Agent::new(config).expect("Agent initialization failed");
 
     // This is an internal method, but we can test it indirectly through process()
     // or we could make it public for testing. For now, just verify agent creation.

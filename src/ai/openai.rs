@@ -71,6 +71,7 @@ impl OpenAiProvider {
                         None
                     };
 
+                    #[allow(deprecated)]
                     let assistant_message = ChatCompletionRequestAssistantMessage {
                         content: Some(ChatCompletionRequestAssistantMessageContent::Text(msg.content.clone())),
                         refusal: None,
