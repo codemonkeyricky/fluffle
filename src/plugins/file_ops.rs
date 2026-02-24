@@ -168,8 +168,10 @@ impl Tool for FileListTool {
     }
 }
 
+static FILE_OPS_PLUGIN: FileOpsPlugin = FileOpsPlugin;
+
 inventory::submit! {
-    &FileOpsPlugin as &'static dyn Plugin
+    &FILE_OPS_PLUGIN as &'static dyn Plugin
 }
 
 #[cfg(test)]
