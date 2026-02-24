@@ -1,146 +1,118 @@
-# Remaining Tasks for Nano Code Agent
+# Remaining Tasks for Iterative Tool Call UI Updates
 
-**Progress so far:** Tasks 1-4 completed (AI abstraction layer, OpenAI provider, Anthropic provider, Agent integration)
+**Progress so far:** Tasks 1-5 completed (SharedMessages struct, App updates, Agent field, message formatting helpers, process() integration)
 
-**Pending tasks:** 5-11
+**Pending tasks:** 6-9
 
----
-
-## Task 5: Create UI module structure
-
-**Goal:** Create Ratatui TUI module structure with four-pane layout.
-
-**Files to create:**
-- `src/ui/mod.rs` - Module exports
-- `src/ui/app.rs` - App state and logic
-- `src/ui/components.rs` - Rendering components
-- `src/ui/event.rs` - Event handling
-
-**Key steps:**
-1. Create UI module exports in `src/ui/mod.rs`
-2. Create App struct with agent integration in `src/ui/app.rs`
-3. Implement event handling with Crossterm in `src/ui/event.rs`
-4. Create rendering components for four-pane layout in `src/ui/components.rs`
-5. Test UI module compilation
-6. Commit UI module structure
-
-**From implementation plan:** See `docs/plans/2026-02-23-nano-code-agent-completion-implementation.md` lines 683-897.
+**Implementation plan reference:** `docs/plans/2026-02-24-iterative-tool-call-ui-updates-consolidated-implementation-plan.md`
 
 ---
 
-## Task 6: Update main.rs with TUI event loop
+## Task 6: Update UI components to use shared messages
 
-**Goal:** Replace simple main.rs with full TUI event loop.
+**Goal:** Update render_chat_history function to use app.shared_messages instead of app.messages for live UI updates.
 
 **Files to modify:**
-- `src/main.rs` - Replace with TUI main loop
+- `src/ui/components.rs:27-38` (render_chat_history function)
+- `src/ui/components.rs:40-46` (render_tool_output function - optional)
 
 **Key steps:**
-1. Write failing compilation test (current main.rs just has println)
-2. Run compilation to verify it fails
-3. Implement main TUI event loop with terminal setup
-4. Integrate App and EventHandler from UI module
-5. Handle keyboard input (Enter to submit, Ctrl+C to quit)
-6. Test compilation and basic build
-7. Commit main application
-
-**From implementation plan:** See lines 901-1005.
-
----
-
-## Task 7: Create library exports
-
-**Goal:** Create proper library exports for external use.
-
-**Files to create:**
-- `src/lib.rs` - Library exports
-
-**Key steps:**
-1. Write failing test for library usage
+1. Write failing test for updated render function in `tests/ui_components_test.rs`
 2. Run test to verify it fails
-3. Implement library exports with module declarations and re-exports
-4. Update main.rs to use library imports (should already work)
-5. Test library compilation
-6. Commit library exports
+3. Update `render_chat_history` function to use `app.shared_messages.take_messages()`
+4. Fix scroll calculation to store message count (avoid calling `take_messages()` twice)
+5. Optional: Update or remove `render_tool_output` function
+6. Run compilation check
+7. Commit changes
 
-**From implementation plan:** See lines 1009-1060.
-
----
-
-## Task 8: Add .gitignore file
-
-**Goal:** Create standard .gitignore for Rust project.
-
-**Files to create:**
-- `.gitignore` - Git ignore patterns
-
-**Key steps:**
-1. Create .gitignore with standard Rust patterns (target/, Cargo.lock, .env, IDE files, OS files)
-2. Test git status to verify .gitignore shows as new file
-3. Commit .gitignore
-
-**From implementation plan:** See lines 1064-1106.
+**Implementation details:**
+- Messages should be taken once and stored: `let messages = app.shared_messages.take_messages();`
+- Store message count: `let message_count = messages.len();`
+- Use stored count for scroll calculation
+- Tool output panel can remain empty for backward compatibility
 
 ---
 
-## Task 9: Create basic README
+## Task 7: Update main.rs to handle dirty flag for redraws
 
-**Goal:** Create README with usage instructions and project overview.
-
-**Files to create:**
-- `README.md` - Project documentation
-
-**Key steps:**
-1. Create README with features, installation, configuration, usage, development guide
-2. Include project structure and plugin creation example
-3. Commit README
-
-**From implementation plan:** See lines 1110-1220.
-
----
-
-## Task 10: End-to-end test setup
-
-**Goal:** Create end-to-end test script for verification.
-
-**Files to create:**
-- `scripts/test_e2e.sh` - End-to-end test script
-
-**Key steps:**
-1. Create end-to-end test script with build, unit tests, environment setup
-2. Make script executable
-3. Run test script to verify it works
-4. Commit end-to-end test script
-
-**From implementation plan:** See lines 1224-1301.
-
----
-
-## Task 11: Fix any remaining compilation issues
-
-**Goal:** Final integration and cleanup.
+**Goal:** Update tick event handler to check dirty flag and force UI redraw when messages are updated.
 
 **Files to modify:**
-- Various source files as needed
+- `src/main.rs:92-126` (main loop)
 
 **Key steps:**
-1. Run full test suite
-2. Fix any compilation warnings
-3. Test final release build
-4. Create final integration commit
+1. Check current tick event handler (does nothing currently)
+2. Update Tick handler to check `app.shared_messages.is_dirty()`
+3. Force redraw by breaking out of match with `continue` when dirty
+4. Run compilation check
+5. Commit changes
 
-**From implementation plan:** See lines 1305-1330.
+**Implementation details:**
+- Current tick handler: `Ok(Event::Tick) => { /* Update status or other periodic tasks */ }`
+- Updated handler should check dirty flag and trigger redraw
+- This ensures UI updates within 250ms tick rate
+
+---
+
+## Task 8: Add integration test for complete flow
+
+**Goal:** Create integration test file to verify shared messages integration works end-to-end.
+
+**Files to create:**
+- `tests/iterative_ui_updates_test.rs`
+
+**Key steps:**
+1. Create integration test file with two tests:
+   - `test_shared_messages_integration`: Verify agent accepts shared messages
+   - `test_agent_process_without_api_key_still_works`: Verify process() fails gracefully without API key
+2. Run integration tests
+3. Commit test file
+
+**Implementation details:**
+- First test creates agent with shared messages and verifies setup
+- Second test ensures agent.process() fails with API error (not panic) when no API key
+- Both tests should pass
+
+---
+
+## Task 9: Clean up unused code and final validation
+
+**Goal:** Remove unused code, run full test suite, fix warnings, finalize implementation.
+
+**Files to check:**
+- `src/ui/app.rs` for unused `messages` field references
+- `src/ui/components.rs` for unused `tool_output` rendering
+- Run full test suite and fix any warnings
+
+**Key steps:**
+1. Remove old `messages` field references from App struct (already replaced by `shared_messages`)
+2. Check `tool_output` panel usage (keep as is for backward compatibility)
+3. Run full test suite
+4. Fix any compilation warnings with `cargo check --all-targets`
+5. Final commit
+
+**Implementation details:**
+- Verify no references to old `messages` field remain
+- `tool_output` field can stay (shows empty panel)
+- All tests should pass (some may require API keys and fail)
+- Fix any unused code warnings
 
 ---
 
 ## Notes
 
-- Current status: AI abstraction layer complete, agent integrated with tool calling flow
-- UI components need to be built and integrated
-- Library exports need to be organized
-- Documentation and testing infrastructure needed
-- Final integration and cleanup required
+- Current status: Core message sharing infrastructure complete, UI integration pending
+- UI will show tool calls as `Tool: name(args)` and results as `Result: output` or `Error: message`
+- Updates will appear incrementally during iterative tool calling (within 250ms tick rate)
+- Backward compatibility maintained for user messages and final responses
 
-**Reference documents:**
-- `docs/plans/2026-02-23-nano-code-agent-completion-implementation.md` - Full implementation plan
-- `docs/plans/2026-02-23-nano-code-agent-completion-design.md` - Design document
+**Completed tasks (1-5):**
+1. ✅ Create SharedMessages struct in ui/app.rs
+2. ✅ Update App struct to use SharedMessages
+3. ✅ Add shared_messages field to Agent struct
+4. ✅ Add message formatting helpers to Agent
+5. ✅ Integrate message pushing in process() method
+
+**Next steps after completion:**
+- Manual testing with actual tool plugins
+- Potential enhancements: color coding, instant updates, tool output panel repurposing
