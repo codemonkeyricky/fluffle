@@ -4,7 +4,6 @@ use serde_json::json;
 #[tokio::test]
 #[ignore = "Requires OpenAI API key"]
 async fn test_openai_provider_creation() {
-    // This test will fail initially because OpenAiProvider doesn't exist
     let provider = OpenAiProvider::new(None);
     assert!(provider.is_ok());
 }
@@ -12,7 +11,6 @@ async fn test_openai_provider_creation() {
 #[tokio::test]
 #[ignore = "Requires OpenAI API key"]
 async fn test_openai_provider_trait() {
-    // This will fail because OpenAiProvider doesn't implement AiProvider
     let provider = OpenAiProvider::new(None).unwrap();
     let messages = vec![Message::user("test")];
     let tools = vec![ToolDefinition {
@@ -20,8 +18,6 @@ async fn test_openai_provider_trait() {
         description: "Test tool".to_string(),
         parameters: json!({}),
     }];
-
-    // Should compile and return error (no API key in test)
     let result = provider.complete_with_tools(messages, tools).await;
     assert!(result.is_err());
 }
