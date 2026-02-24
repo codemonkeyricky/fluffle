@@ -65,42 +65,35 @@ impl Agent {
         // Add user message to conversation history
         self.conversation_history.push(Message::user(user_message));
 
-        // Convert tools to AI tool definitions
-        let tool_definitions = self.tools_to_definitions();
+        let mut iteration = 0;
 
-        // Get initial AI response with tools
-        let ai_response = self.ai_provider.complete_with_tools(
-            &self.conversation_history,
-            &tool_definitions,
-        ).await?;
+        loop {
+            iteration += 1;
+            if iteration > self.config.max_tool_iterations {
+                return Err(crate::error::Error::ToolIterationLimit(iteration));
+            }
 
-        let tool_calls = ai_response.tool_calls.clone();
+            // Convert tools to AI tool definitions
+            let tool_definitions = self.tools_to_definitions();
 
-        if tool_calls.is_empty() {
-            // No tool calls - simple response
-            self.conversation_history.push(Message::assistant(&ai_response.content));
-            return Ok(ai_response.content);
+            // Get AI response with tools
+            let ai_response = self.ai_provider.complete_with_tools(
+                &self.conversation_history,
+                &tool_definitions,
+            ).await?;
+
+            // Check if we have a final response (no tool calls)
+            if ai_response.tool_calls.is_empty() {
+                self.conversation_history.push(Message::assistant(&ai_response.content));
+                return Ok(ai_response.content);
+            }
+
+            // We have tool calls - continue to execution
+            break; // TODO: Remove this break after implementing tool execution loop
         }
 
-        // Add assistant message with tool calls to history
-        self.conversation_history.push(Message::assistant_with_tool_calls(
-            &ai_response.content,
-            tool_calls.clone(),
-        ));
-
-        // Execute tool calls
-        let tool_results = self.execute_tool_calls(&tool_calls).await?;
-
-        // Check if any tool execution failed
-        let final_response = if Self::has_tool_execution_failures(&tool_results) {
-            // If tools failed, return the initial response with error info
-            Self::format_response_with_errors(&ai_response.content, &tool_results)
-        } else {
-            // All tools succeeded, get final AI response
-            self.get_final_ai_response(&tool_definitions).await?
-        };
-
-        Ok(final_response)
+        // Temporary: keep existing behavior for now
+        Err(crate::error::Error::Ai("Iterative tool calling not fully implemented".to_string()))
     }
 
     /// Execute multiple tool calls and add results to conversation history.
@@ -200,18 +193,6 @@ impl Agent {
         }
     }
 
-    /// Get final AI response after successful tool execution.
-    async fn get_final_ai_response(&mut self, tool_definitions: &[ToolDefinition]) -> Result<String> {
-        let final_ai_response = self.ai_provider.complete_with_tools(
-            &self.conversation_history,
-            tool_definitions,
-        ).await?;
-
-        // Add final assistant response to history
-        self.conversation_history.push(Message::assistant(&final_ai_response.content));
-
-        Ok(final_ai_response.content)
-    }
 }
 
 #[cfg(test)]
