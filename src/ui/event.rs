@@ -22,15 +22,17 @@ impl EventHandler {
             match event::poll(tick_rate) {
                 Ok(true) => {
                     if let Ok(CrosstermEvent::Key(key)) = event::read() {
-                        let _ = tx.send(Event::Key(key)); // Ignore send errors
+                        if tx.send(Event::Key(key)).is_err() { break; } // Channel disconnected
                     }
                 }
                 Ok(false) => {} // No event
                 Err(_) => break, // Poll error, exit thread
             }
 
-            // Send tick, ignore errors (channel may be disconnected)
-            let _ = tx.send(Event::Tick);
+            // Send tick, break if channel is disconnected
+            if tx.send(Event::Tick).is_err() {
+                break;
+            }
         });
 
         Self { rx }

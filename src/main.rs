@@ -24,6 +24,8 @@ impl TerminalGuard {
         match execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
             Ok(_) => {}
             Err(e) => {
+                // Cleanup: leave alternate screen and disable mouse capture
+                let _ = execute!(stdout, LeaveAlternateScreen, DisableMouseCapture);
                 let _ = disable_raw_mode();
                 return Err(e.into());
             }
