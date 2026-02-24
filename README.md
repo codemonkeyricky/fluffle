@@ -78,7 +78,36 @@ Example plugin structure:
 ```rust
 use std::sync::Arc;
 use crate::plugin::{Plugin, Tool};
+use crate::types::{ToolContext, ToolResult};
+use serde_json::json;
 use inventory;
+
+pub struct MyTool;
+
+impl Tool for MyTool {
+    fn name(&self) -> &'static str {
+        "my_tool"
+    }
+
+    fn description(&self) -> &'static str {
+        "A custom tool that does something useful"
+    }
+
+    fn parameters(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        })
+    }
+
+    fn execute(&self, _context: ToolContext) -> ToolResult {
+        Ok(json!({
+            "success": true,
+            "message": "Custom tool executed successfully"
+        }))
+    }
+}
 
 pub struct MyPlugin;
 
