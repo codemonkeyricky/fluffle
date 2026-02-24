@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use async_trait::async_trait;
 use crate::plugin::{Tool, Plugin};
 use crate::types::{ToolContext, ToolResult, ToolParameters};
+use crate::error::Result;
 
 pub struct FileOpsPlugin;
 
@@ -167,10 +168,8 @@ impl Tool for FileListTool {
     }
 }
 
-static FILE_OPS_PLUGIN: FileOpsPlugin = FileOpsPlugin;
-
 inventory::submit! {
-    &FILE_OPS_PLUGIN as &'static dyn Plugin
+    &FileOpsPlugin as &'static dyn Plugin
 }
 
 #[cfg(test)]
