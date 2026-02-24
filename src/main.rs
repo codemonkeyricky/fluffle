@@ -16,11 +16,31 @@ struct TerminalGuard {
 impl TerminalGuard {
     /// Setup terminal and return guard that will restore on drop.
     fn setup() -> Result<Self> {
+        // Enable raw mode - if this fails, no cleanup needed
         enable_raw_mode()?;
+
+        // Enter alternate screen and enable mouse capture
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        match execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
+            Ok(_) => {}
+            Err(e) => {
+                let _ = disable_raw_mode();
+                return Err(e.into());
+            }
+        }
+
+        // Create terminal backend
         let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend)?;
+
+        // Create terminal - if this fails, cleanup alternate screen and raw mode
+        let terminal = match Terminal::new(backend) {
+            Ok(terminal) => terminal,
+            Err(e) => {
+                let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+                let _ = disable_raw_mode();
+                return Err(e.into());
+            }
+        };
 
         Ok(Self { terminal: Some(terminal) })
     }
