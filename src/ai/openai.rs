@@ -84,8 +84,8 @@ impl OpenAiProvider {
 impl AiProvider for OpenAiProvider {
     async fn complete_with_tools(
         &self,
-        messages: Vec<Message>,
-        tools: Vec<ToolDefinition>,
+        messages: &[Message],
+        tools: &[ToolDefinition],
     ) -> Result<AiResponse> {
         use async_openai::types::chat::CreateChatCompletionRequest;
         use async_openai::types::chat::ChatCompletionToolChoiceOption::Mode;

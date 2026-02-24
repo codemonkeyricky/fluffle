@@ -18,6 +18,6 @@ async fn test_anthropic_provider_trait() {
         parameters: json!({}),
     }];
 
-    let result = provider.complete_with_tools(messages, tools).await;
+    let result = provider.complete_with_tools(&messages, &tools).await;
     assert!(result.is_err());
 }

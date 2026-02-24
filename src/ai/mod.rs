@@ -20,8 +20,8 @@ use async_trait::async_trait;
 pub trait AiProvider: Send + Sync {
     async fn complete_with_tools(
         &self,
-        messages: Vec<Message>,
-        tools: Vec<ToolDefinition>,
+        messages: &[Message],
+        tools: &[ToolDefinition],
     ) -> Result<AiResponse>;
 }
 

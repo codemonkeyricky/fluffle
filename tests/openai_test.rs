@@ -18,6 +18,6 @@ async fn test_openai_provider_trait() {
         description: "Test tool".to_string(),
         parameters: json!({}),
     }];
-    let result = provider.complete_with_tools(messages, tools).await;
+    let result = provider.complete_with_tools(&messages, &tools).await;
     assert!(result.is_err());
 }
