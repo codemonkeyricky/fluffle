@@ -12,6 +12,8 @@ A Claude-Code-like code agent with plugin architecture, built in Rust.
 
 ## Installation
 
+Requires Rust (install via [rustup](https://rustup.rs/)).
+
 ```bash
 git clone <repository>
 cd nanocode
@@ -74,6 +76,8 @@ src/
 
 Example plugin structure:
 ```rust
+use std::sync::Arc;
+use crate::plugin::{Plugin, Tool};
 use inventory;
 
 pub struct MyPlugin;
@@ -86,7 +90,11 @@ impl Plugin for MyPlugin {
     }
 }
 
-inventory::submit!(&dyn Plugin = &MyPlugin);
+static MY_PLUGIN: MyPlugin = MyPlugin;
+
+inventory::submit! {
+    &MY_PLUGIN as &'static dyn Plugin
+}
 ```
 
 ## License
