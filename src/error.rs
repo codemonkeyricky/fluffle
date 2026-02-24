@@ -14,6 +14,9 @@ pub enum Error {
     #[error("AI error: {0}")]
     Ai(String),
 
+    #[error("Tool iteration limit exceeded: {0}")]
+    ToolIterationLimit(u32),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -31,5 +34,11 @@ mod tests {
     fn test_error_display() {
         let err = Error::ConfigLoad("test".to_string());
         assert_eq!(err.to_string(), "Failed to load config: test");
+    }
+
+    #[test]
+    fn test_tool_iteration_limit_error() {
+        let err = Error::ToolIterationLimit(5);
+        assert_eq!(err.to_string(), "Tool iteration limit exceeded: 5");
     }
 }
