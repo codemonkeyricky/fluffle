@@ -54,5 +54,22 @@ mod tests {
         let result = ToolResult::success("test output");
         assert!(result.is_success());
         assert_eq!(result.output(), "test output");
+        assert_eq!(result.error_message(), None);
+    }
+
+    #[test]
+    fn test_tool_result_error() {
+        let result = ToolResult::error("test error");
+        assert!(!result.is_success());
+        assert_eq!(result.output(), "");
+        assert_eq!(result.error_message(), Some("test error"));
+    }
+
+    #[test]
+    fn test_tool_result_error_with_empty_string() {
+        let result = ToolResult::error("");
+        assert!(!result.is_success());
+        assert_eq!(result.output(), "");
+        assert_eq!(result.error_message(), Some(""));
     }
 }
