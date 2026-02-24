@@ -77,13 +77,15 @@ src/
 Example plugin structure:
 ```rust
 use std::sync::Arc;
+use async_trait::async_trait;
 use crate::plugin::{Plugin, Tool};
-use crate::types::{ToolContext, ToolResult};
+use crate::types::{ToolContext, ToolResult, ToolParameters};
 use serde_json::json;
 use inventory;
 
 pub struct MyTool;
 
+#[async_trait]
 impl Tool for MyTool {
     fn name(&self) -> &'static str {
         "my_tool"
@@ -93,7 +95,7 @@ impl Tool for MyTool {
         "A custom tool that does something useful"
     }
 
-    fn parameters(&self) -> serde_json::Value {
+    fn parameters(&self) -> ToolParameters {
         json!({
             "type": "object",
             "properties": {},
@@ -101,11 +103,10 @@ impl Tool for MyTool {
         })
     }
 
-    fn execute(&self, _context: ToolContext) -> ToolResult {
-        Ok(json!({
-            "success": true,
-            "message": "Custom tool executed successfully"
-        }))
+    async fn execute(&self, _ctx: &ToolContext, _params: ToolParameters) -> ToolResult {
+        Ok(ToolResult::success(
+            "Custom tool executed successfully"
+        ))
     }
 }
 
