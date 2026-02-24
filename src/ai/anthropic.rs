@@ -4,20 +4,20 @@
 
 use crate::error::{Error, Result};
 use crate::ai::{AiProvider, Message, ToolDefinition, AiResponse, ToolCall};
-use anthropic_sdk::Client;
+use anthropic_sdk::{Client, ToolChoice};
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
 
 pub struct AnthropicProvider {
     api_key: Option<String>,
+    model: String,
 }
 
 impl AnthropicProvider {
     pub fn new(api_key: Option<&str>) -> Result<Self> {
         Ok(Self {
             api_key: api_key.map(|s| s.to_string()),
+            model: "claude-3-haiku-20240307".to_string(), // TODO: make configurable
         })
     }
 
@@ -162,38 +162,40 @@ impl AiProvider for AnthropicProvider {
         messages: Vec<Message>,
         tools: Vec<ToolDefinition>,
     ) -> Result<AiResponse> {
-        let client = Client::new();
-        let mut builder = client
-            .model("claude-3-haiku-20240307") // TODO: make configurable
-            .max_tokens(4096);
+        let mut client = Client::new();
 
         if let Some(api_key) = &self.api_key {
-            builder = builder.auth(api_key);
+            client = client.auth(api_key);
         }
 
         let messages_json = Self::convert_messages(&messages);
         let tools_json = Self::convert_tools(&tools);
 
-        builder = builder.messages(&messages_json);
-        builder = builder.tools(&tools_json);
-
-        let request = builder.build()
+        let request_builder = client
+            .model(&self.model)
+            .max_tokens(4096)
+            .stream(false)
+            .tool_choice(ToolChoice::Auto)
+            .messages(&messages_json)
+            .tools(&tools_json)
+            .builder()
             .map_err(|e| Error::Ai(format!("Failed to build Anthropic request: {}", e)))?;
 
-        let response_text = Arc::new(Mutex::new(String::new()));
-        let response_text_clone = response_text.clone();
-        request
-            .execute(move |text| {
-                let response_text = response_text_clone.clone();
-                async move {
-                    let mut guard = response_text.lock().unwrap();
-                    guard.push_str(&text);
-                }
-            })
+        let response = request_builder
+            .send()
             .await
-            .map_err(|e| Error::Ai(format!("Anthropic API error: {}", e)))?;
+            .map_err(|e| Error::Ai(format!("Failed to send Anthropic request: {}", e)))?;
 
-        let response_str = response_text.lock().unwrap().clone();
-        Self::parse_response(&response_str)
+        let status = response.status();
+        let response_text = response
+            .text()
+            .await
+            .map_err(|e| Error::Ai(format!("Failed to read Anthropic response: {}", e)))?;
+
+        if !status.is_success() {
+            return Err(Error::Ai(format!("Anthropic API error ({}): {}", status, response_text)));
+        }
+
+        Self::parse_response(&response_text)
     }
 }
