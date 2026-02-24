@@ -2,26 +2,25 @@
 //!
 //! This module provides an `AiProvider` implementation using the OpenAI API.
 
-use crate::ai::types::{AiResponse, Message, ToolDefinition};
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::ai::{AiProvider, Message, ToolDefinition, AiResponse, ToolCall};
+use async_openai::config::OpenAIConfig;
 use async_trait::async_trait;
-use super::AiProvider;
 
-/// OpenAI provider implementation.
 pub struct OpenAiProvider {
-    api_key: Option<String>,
+    client: async_openai::Client<OpenAIConfig>,
 }
 
 impl OpenAiProvider {
-    /// Create a new OpenAI provider.
-    ///
-    /// # Arguments
-    ///
-    /// * `api_key` - Optional OpenAI API key. If not provided, the provider
-    ///   will attempt to read it from the environment.
     pub fn new(api_key: Option<&str>) -> Result<Self> {
-        // TODO: implement
-        Err(crate::error::Error::Ai("OpenAI provider not yet implemented".to_string()))
+        let config = if let Some(key) = api_key {
+            OpenAIConfig::new().with_api_key(key)
+        } else {
+            OpenAIConfig::new()
+        };
+
+        let client = async_openai::Client::with_config(config);
+        Ok(Self { client })
     }
 }
 
@@ -32,7 +31,6 @@ impl AiProvider for OpenAiProvider {
         _messages: Vec<Message>,
         _tools: Vec<ToolDefinition>,
     ) -> Result<AiResponse> {
-        // TODO: implement
-        Err(crate::error::Error::Ai("OpenAI provider not yet implemented".to_string()))
+        Err(Error::Ai("OpenAI provider not yet implemented".to_string()))
     }
 }

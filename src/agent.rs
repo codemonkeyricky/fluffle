@@ -1,45 +1,12 @@
 use crate::config::Config;
 use crate::error::Result;
-use anthropic_sdk;
-
-// Type aliases for AI clients
-type OpenAiClient = async_openai::Client<async_openai::config::OpenAIConfig>;
-type AnthropicClient = anthropic_sdk::Client;
-
-/// Enum representing different AI providers
-pub enum AiClient {
-    /// OpenAI client using async-openai crate
-    OpenAI(OpenAiClient),
-    /// Anthropic client using anthropic-sdk crate
-    Anthropic(AnthropicClient),
-}
-
-impl AiClient {
-    /// Create an AI client from configuration
-    pub fn from_config(config: &Config) -> Result<Self> {
-        match config.provider.as_str() {
-            "openai" => {
-                // Create OpenAI client
-                // If api_key is provided, use it, otherwise rely on environment variable
-                let client = async_openai::Client::new();
-                Ok(AiClient::OpenAI(client))
-            }
-            "anthropic" => {
-                // Create Anthropic client
-                // Client reads API key from environment variable ANTHROPIC_API_KEY
-                let client = anthropic_sdk::Client::new();
-                Ok(AiClient::Anthropic(client))
-            }
-            _ => Err(crate::error::Error::Ai(format!("Unsupported provider: {}", config.provider))),
-        }
-    }
-}
+use crate::ai::{AiProvider, create_provider};
 
 pub struct Agent {
     config: Config,
     tools: Vec<std::sync::Arc<dyn crate::plugin::Tool>>,
     context: crate::types::ToolContext,
-    ai_client: AiClient,
+    ai_provider: Box<dyn AiProvider>,
 }
 
 impl Agent {
@@ -54,14 +21,14 @@ impl Agent {
             permissions: Vec::new(),
         };
 
-        // Create AI client based on provider
-        let ai_client = AiClient::from_config(&config)?;
+        // Create AI provider based on configuration
+        let ai_provider = create_provider(&config.provider, config.api_key.as_deref())?;
 
         Ok(Self {
             config,
             tools,
             context,
-            ai_client,
+            ai_provider,
         })
     }
 

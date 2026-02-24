@@ -26,7 +26,8 @@ pub trait AiProvider: Send + Sync {
 }
 
 pub fn create_provider(provider_type: &str, api_key: Option<&str>) -> Result<Box<dyn AiProvider>> {
-    match provider_type {
+    let normalized = provider_type.trim().to_lowercase();
+    match normalized.as_str() {
         "openai" => Ok(Box::new(OpenAiProvider::new(api_key)?)),
         "anthropic" => Ok(Box::new(AnthropicProvider::new(api_key)?)),
         _ => Err(crate::error::Error::Ai(format!("Unsupported provider: {}", provider_type))),

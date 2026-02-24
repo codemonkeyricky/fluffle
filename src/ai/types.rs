@@ -5,8 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::types::ToolParameters;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum MessageRole {
     User,
     Assistant,
@@ -17,6 +19,12 @@ pub enum MessageRole {
 pub struct Message {
     pub role: MessageRole,
     pub content: String,
+    /// Optional tool call ID (for tool messages).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    /// Optional tool calls (for assistant messages).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl Message {
@@ -24,6 +32,8 @@ impl Message {
         Self {
             role: MessageRole::User,
             content: content.to_string(),
+            tool_call_id: None,
+            tool_calls: None,
         }
     }
 
@@ -31,13 +41,26 @@ impl Message {
         Self {
             role: MessageRole::Assistant,
             content: content.to_string(),
+            tool_call_id: None,
+            tool_calls: None,
         }
     }
 
-    pub fn tool(name: &str, content: &str) -> Self {
+    pub fn tool(tool_call_id: &str, content: &str) -> Self {
         Self {
             role: MessageRole::Tool,
-            content: format!("{}: {}", name, content),
+            content: content.to_string(),
+            tool_call_id: Some(tool_call_id.to_string()),
+            tool_calls: None,
+        }
+    }
+
+    pub fn assistant_with_tool_calls(content: &str, tool_calls: Vec<ToolCall>) -> Self {
+        Self {
+            role: MessageRole::Assistant,
+            content: content.to_string(),
+            tool_call_id: None,
+            tool_calls: Some(tool_calls),
         }
     }
 }
@@ -46,7 +69,7 @@ impl Message {
 pub struct ToolDefinition {
     pub name: String,
     pub description: String,
-    pub parameters: Value,
+    pub parameters: ToolParameters,
 }
 
 #[derive(Debug)]
@@ -55,8 +78,9 @@ pub struct AiResponse {
     pub tool_calls: Vec<ToolCall>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
+    pub id: String,
     pub name: String,
     pub arguments: Value,
 }
