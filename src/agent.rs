@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::ai::{AiProvider, create_provider, Message, ToolDefinition, ToolCall};
 use crate::types::{ToolContext, ToolResult};
+use crate::ui::app::SharedMessages;
 use std::sync::Arc;
 
 pub struct Agent {
@@ -10,6 +11,7 @@ pub struct Agent {
     context: ToolContext,
     ai_provider: Box<dyn AiProvider>,
     conversation_history: Vec<Message>,
+    shared_messages: Option<Arc<SharedMessages>>,
 }
 
 impl Agent {
@@ -33,11 +35,16 @@ impl Agent {
             context,
             ai_provider,
             conversation_history: Vec::new(),
+            shared_messages: None,
         })
     }
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    pub fn set_shared_messages(&mut self, shared: Arc<SharedMessages>) {
+        self.shared_messages = Some(shared);
     }
 
     /// Discover all tools registered via the plugin inventory.
@@ -247,5 +254,28 @@ mod tests {
         assert_eq!(stored_config.max_tool_iterations, config.max_tool_iterations);
         // Compare api_key (both are Option<String>)
         assert_eq!(stored_config.api_key, config.api_key);
+    }
+
+    #[test]
+    fn test_agent_accepts_shared_messages() {
+        use crate::ui::app::SharedMessages;
+        use std::sync::Arc;
+
+        let config = Config {
+            model: "gpt-4".to_string(),
+            api_key: None,
+            provider: "openai".to_string(),
+            max_tokens: 4096,
+            temperature: 0.7,
+            max_tool_iterations: 10,
+        };
+
+        let mut agent = Agent::new(config).expect("Agent initialization failed");
+
+        // This should compile once set_shared_messages is added
+        let shared = Arc::new(SharedMessages::new());
+        agent.set_shared_messages(shared);
+
+        assert!(true);
     }
 }

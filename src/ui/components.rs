@@ -25,14 +25,18 @@ pub fn render(frame: &mut Frame, app: &App) {
 }
 
 fn render_chat_history(frame: &mut Frame, area: Rect, app: &App) {
-    let messages: Vec<Line> = app.messages.iter()
+    let messages = app.shared_messages.take_messages();
+    let message_count = messages.len();
+
+    let lines: Vec<Line> = messages
+        .iter()
         .map(|msg| Line::from(msg.clone()))
         .collect();
 
-    let history = Paragraph::new(messages)
+    let history = Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL).title("Chat"))
         .wrap(Wrap { trim: true })
-        .scroll((app.messages.len() as u16, 0));
+        .scroll((message_count as u16, 0));
 
     frame.render_widget(history, area);
 }
