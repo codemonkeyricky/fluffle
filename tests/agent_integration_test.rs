@@ -10,6 +10,7 @@ async fn test_agent_creation_and_structure() {
         provider: "openai".to_string(),
         max_tokens: 4096,
         temperature: 0.7,
+        max_tool_iterations: 10,
     };
 
     // Create agent - this should succeed
@@ -38,6 +39,7 @@ async fn test_agent_process_method_exists() {
         provider: "openai".to_string(),
         max_tokens: 4096,
         temperature: 0.7,
+        max_tool_iterations: 10,
     };
 
     // Create agent
@@ -65,6 +67,7 @@ async fn test_agent_tools_access() {
         provider: "openai".to_string(),
         max_tokens: 4096,
         temperature: 0.7,
+        max_tool_iterations: 10,
     };
 
     let agent = Agent::new(config).expect("Agent initialization failed");
@@ -93,6 +96,7 @@ async fn test_agent_conversation_history_management() {
         provider: "openai".to_string(),
         max_tokens: 4096,
         temperature: 0.7,
+        max_tool_iterations: 10,
     };
 
     let mut agent = Agent::new(config).expect("Agent initialization failed");
@@ -124,6 +128,7 @@ async fn test_agent_tool_conversion() {
         provider: "openai".to_string(),
         max_tokens: 4096,
         temperature: 0.7,
+        max_tool_iterations: 10,
     };
 
     let _agent = Agent::new(config).expect("Agent initialization failed");

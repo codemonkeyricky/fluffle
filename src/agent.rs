@@ -227,6 +227,7 @@ mod tests {
             provider: "openai".to_string(),
             max_tokens: 4096,
             temperature: 0.7,
+            max_tool_iterations: 10,
         };
 
         // This should succeed without panicking
@@ -247,6 +248,7 @@ mod tests {
             provider: "openai".to_string(),
             max_tokens: 1000,
             temperature: 0.5,
+            max_tool_iterations: 10,
         };
 
         let agent = Agent::new(config.clone()).expect("Agent initialization failed");

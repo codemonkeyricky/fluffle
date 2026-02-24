@@ -3,6 +3,10 @@ use config::{Config as ConfigBuilder, File, Environment};
 use serde::Deserialize;
 use std::path::PathBuf;
 
+fn default_max_tool_iterations() -> u32 {
+    10
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub model: String,
@@ -10,6 +14,8 @@ pub struct Config {
     pub provider: String,
     pub max_tokens: u32,
     pub temperature: f32,
+    #[serde(default = "default_max_tool_iterations")]
+    pub max_tool_iterations: u32,  // default: 10
 }
 
 impl Config {
@@ -48,5 +54,14 @@ mod tests {
     async fn test_load_default_config() {
         let config = Config::load().await.unwrap();
         assert_eq!(config.model, "claude-3-haiku-20240307");
+    }
+
+    #[tokio::test]
+    async fn test_config_loads_with_max_tool_iterations() {
+        // Temporarily set environment variable to test config loading
+        std::env::set_var("NANOCODE_MAX_TOOL_ITERATIONS", "15");
+        let config = Config::load().await.unwrap();
+        assert_eq!(config.max_tool_iterations, 15);
+        std::env::remove_var("NANOCODE_MAX_TOOL_ITERATIONS");
     }
 }
