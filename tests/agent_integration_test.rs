@@ -55,8 +55,13 @@ async fn test_agent_process_method_exists() {
     // Check error type
     let err = result.unwrap_err();
     let err_str = err.to_string();
-    assert!(err_str.contains("API key") || err_str.contains("OpenAI") || err_str.contains("API error"),
-            "Error should be related to API: {}", err_str);
+    assert!(
+        err_str.contains("API") ||
+        err_str.contains("iteration") ||
+        err_str.contains("OpenAI") ||
+        err_str.contains("AI error"),
+        "Error should be related to API or iteration: {}", err_str
+    );
 }
 
 #[tokio::test]
@@ -140,8 +145,6 @@ async fn test_agent_tool_conversion() {
 
 #[tokio::test]
 async fn test_agent_process_handles_iterative_tool_calls() {
-    use nanocode::ai::{AiResponse, ToolCall};
-    use serde_json::json;
 
     // Create a mock agent or test with actual provider
     // This test will initially fail because process() doesn't loop
@@ -154,7 +157,7 @@ async fn test_agent_process_handles_iterative_tool_calls() {
         max_tool_iterations: 10,
     };
 
-    let mut agent = Agent::new(config).expect("Agent initialization failed");
+    let agent = Agent::new(config).expect("Agent initialization failed");
 
     // We can't easily test iterative behavior without mocking
     // For now, just verify agent accepts the new config field

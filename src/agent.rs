@@ -224,6 +224,7 @@ mod tests {
         assert_eq!(stored_config.provider, config.provider);
         assert_eq!(stored_config.max_tokens, config.max_tokens);
         assert_eq!(stored_config.temperature, config.temperature);
+        assert_eq!(stored_config.max_tool_iterations, config.max_tool_iterations);
         // Compare api_key (both are Option<String>)
         assert_eq!(stored_config.api_key, config.api_key);
     }
