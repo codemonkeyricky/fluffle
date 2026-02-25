@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
     let event_handler = EventHandler::new(250);
 
     // Update plugin count (already set in App::new, but refresh for consistency)
-    app.status.plugins_loaded = app.agent.tools().len();
+    app.status.plugins_loaded = app.agent.read().await.tools().len();
 
     // Main loop
     let result = async {
@@ -117,6 +117,9 @@ async fn main() -> Result<()> {
                         // Break out of match to trigger redraw on next iteration
                         continue;
                     }
+                }
+                Ok(Event::TaskCompleted) => {
+                    // Handle task completion (will be implemented in Task 3)
                 }
                 Err(_) => {
                     // Channel disconnected, break loop

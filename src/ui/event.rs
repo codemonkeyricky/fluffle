@@ -6,6 +6,7 @@ use std::time::Duration;
 pub enum Event {
     Key(KeyEvent),
     Tick,
+    TaskCompleted,  // New: Background task finished
 }
 
 pub struct EventHandler {

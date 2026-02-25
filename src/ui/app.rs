@@ -3,13 +3,17 @@ use crate::config::Config;
 use crate::error::Result;
 use std::sync::Arc;
 use super::shared_messages::SharedMessages;
+use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
 
 pub struct App {
-    pub agent: Agent,
+    pub agent: Arc<RwLock<Agent>>,
     pub shared_messages: Arc<SharedMessages>,
     pub input: String,
     pub should_quit: bool,
     pub status: StatusInfo,
+    pub processing_task: Option<JoinHandle<Result<String>>>,
+    pub pending_result: Option<String>,
 }
 
 pub struct StatusInfo {
@@ -36,11 +40,13 @@ impl App {
         };
 
         Ok(Self {
-            agent,
+            agent: Arc::new(RwLock::new(agent)),
             shared_messages,
             input: String::new(),
             should_quit: false,
             status,
+            processing_task: None,
+            pending_result: None,
         })
     }
 
@@ -53,7 +59,7 @@ impl App {
         self.shared_messages.push(format!("> {}", self.input));
 
         // Process through agent (will push tool messages via shared_messages)
-        let response = self.agent.process(&self.input).await?;
+        let response = self.agent.write().await.process(&self.input).await?;
 
         // Add final response to display
         self.shared_messages.push(response);
