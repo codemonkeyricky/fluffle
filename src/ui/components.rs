@@ -49,10 +49,17 @@ fn render_input(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
-    let status_text = format!(
-        "nano code | Model: {} | Provider: {} | Plugins: {} | Press Ctrl+C to quit",
-        app.status.model, app.status.provider, app.status.plugins_loaded
-    );
+    let status_text = if app.is_processing() {
+        format!(
+            "nano code | Model: {} | Provider: {} | Plugins: {} | Processing...",
+            app.status.model, app.status.provider, app.status.plugins_loaded
+        )
+    } else {
+        format!(
+            "nano code | Model: {} | Provider: {} | Plugins: {} | Press Ctrl+C to quit",
+            app.status.model, app.status.provider, app.status.plugins_loaded
+        )
+    };
 
     let status = Paragraph::new(status_text)
         .block(Block::default())

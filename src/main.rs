@@ -110,9 +110,14 @@ async fn main() -> Result<()> {
                     _ => {} // Ignore other keys
                 },
                 Some(Event::Tick) => {
+                    // Check if background task completed
+                    if app.check_task_completion().await {
+                        // Task completed, redraw to show final result
+                        continue;
+                    }
+
                     // Force redraw if messages have been updated
                     if app.shared_messages.is_dirty() {
-                        // Break out of match to trigger redraw on next iteration
                         continue;
                     }
                 }

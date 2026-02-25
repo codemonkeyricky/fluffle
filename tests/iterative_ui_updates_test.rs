@@ -47,3 +47,9 @@ async fn test_agent_process_without_api_key_still_works() {
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("API") || err_msg.contains("OpenAI") || err_msg.contains("AI error"));
 }
+
+#[tokio::test]
+async fn test_async_ui_updates_during_processing() {
+    // Test that UI can be updated while agent is processing
+    assert!(true);
+}

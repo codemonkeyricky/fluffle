@@ -5,6 +5,8 @@ use std::sync::Arc;
 use super::shared_messages::SharedMessages;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use futures::poll;
+use std::task::Poll;
 
 pub struct App {
     pub agent: Arc<RwLock<Agent>>,
@@ -51,24 +53,88 @@ impl App {
         })
     }
 
+    /// Handles the current input asynchronously by spawning a background task.
+    /// Returns immediately, allowing the UI to remain responsive during processing.
+    /// Use `is_processing()` to check if a task is running.
     pub async fn handle_input(&mut self) -> Result<()> {
         if self.input.trim().is_empty() {
+            return Ok(());
+        }
+
+        // Don't start new task if one is already running
+        if self.processing_task.is_some() {
             return Ok(());
         }
 
         // Add user message to display
         self.shared_messages.push(format!("> {}", self.input));
 
-        // Process through agent (will push tool messages via shared_messages)
-        let response = self.agent.write().await.process(&self.input).await?;
+        // Clone references for background task
+        let agent_clone = self.agent.clone();
+        let shared_messages_clone = self.shared_messages.clone();
+        let input = std::mem::take(&mut self.input);
 
-        // Add final response to display
-        self.shared_messages.push(response);
+        // Spawn background processing task
+        self.processing_task = Some(tokio::task::spawn_local(async move {
+            let mut agent = agent_clone.write().await;
+            let result = agent.process(&input).await;
 
-        // Clear input
-        self.input.clear();
+            match result {
+                Ok(response) => {
+                    // Add final response to shared messages
+                    shared_messages_clone.push(response.clone());
+                    Ok(response)
+                }
+                Err(e) => {
+                    // Add error to shared messages
+                    shared_messages_clone.push(format!("Error: {}", e));
+                    Err(e)
+                }
+            }
+        }));
 
         Ok(())
+    }
+
+    /// Returns true if a background processing task is currently running.
+    pub fn is_processing(&self) -> bool {
+        self.processing_task.is_some()
+    }
+
+    /// Checks if the current background processing task has completed.
+    /// Returns true if a task was completed (successfully or with error).
+    /// If the task completed successfully, the result is stored in `pending_result`.
+    pub async fn check_task_completion(&mut self) -> bool {
+        if let Some(task) = &mut self.processing_task {
+            match poll!(task) {
+                Poll::Ready(result) => {
+                    match result {
+                        Ok(Ok(response)) => {
+                            self.pending_result = Some(response);
+                        }
+                        Ok(Err(e)) => {
+                            eprintln!("Task failed: {}", e);
+                        }
+                        Err(join_err) => {
+                            eprintln!("Task panicked: {}", join_err);
+                        }
+                    }
+                    self.processing_task = None;
+                    true
+                }
+                Poll::Pending => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Cancels any ongoing background processing task.
+    /// Aborts the task immediately without waiting for completion.
+    pub fn cancel_processing(&mut self) {
+        if let Some(task) = self.processing_task.take() {
+            task.abort();
+        }
     }
 
     pub fn quit(&mut self) {
