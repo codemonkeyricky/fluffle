@@ -79,7 +79,7 @@ mod tests {
         use crate::config::Config;
 
         // Create minimal config for test
-        let config = Config {
+        let _config = Config {
             model: "test-model".to_string(),
             api_key: None,
             provider: "test".to_string(),

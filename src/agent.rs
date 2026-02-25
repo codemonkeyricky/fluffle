@@ -335,7 +335,7 @@ mod tests {
         agent.set_shared_messages(shared.clone());
 
         // Test tool call formatting
-        let args = json!({"path": "src/main.rs"});
+        let _args = json!({"path": "src/main.rs"});
         // We can't test private methods directly
         // This test just verifies agent compiles with helpers
 
