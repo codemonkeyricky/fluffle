@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
 
     // Create app
     let mut app = App::new().await?;
-    let event_handler = EventHandler::new(250);
+    let mut event_handler = EventHandler::new(250);
 
 
     // Main loop
@@ -93,8 +93,8 @@ async fn main() -> Result<()> {
                 nanocode::ui::components::render(f, &app);
             })?;
 
-            match event_handler.next() {
-                Ok(Event::Key(key)) => match key.code {
+            match event_handler.next().await {
+                Some(Event::Key(key)) => match key.code {
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         app.quit();
                     }
@@ -109,17 +109,17 @@ async fn main() -> Result<()> {
                     }
                     _ => {} // Ignore other keys
                 },
-                Ok(Event::Tick) => {
+                Some(Event::Tick) => {
                     // Force redraw if messages have been updated
                     if app.shared_messages.is_dirty() {
                         // Break out of match to trigger redraw on next iteration
                         continue;
                     }
                 }
-                Ok(Event::TaskCompleted) => {
+                Some(Event::TaskCompleted) => {
                     // Handle task completion (will be implemented in Task 3)
                 }
-                Err(_) => {
+                None => {
                     // Channel disconnected, break loop
                     break;
                 }
