@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::ai::{AiProvider, create_provider, Message, ToolDefinition, ToolCall};
 use crate::types::{ToolContext, ToolResult};
-use crate::ui::app::SharedMessages;
+use crate::ui::SharedMessages;
 use std::sync::Arc;
 
 pub struct Agent {
@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn test_agent_accepts_shared_messages() {
-        use crate::ui::app::SharedMessages;
+        use crate::ui::SharedMessages;
         use std::sync::Arc;
 
         let config = Config {
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn test_agent_message_formatting() {
         use serde_json::json;
-        use crate::ui::app::SharedMessages;
+        use crate::ui::SharedMessages;
         use std::sync::Arc;
 
         let config = Config {
