@@ -170,6 +170,10 @@ impl Agent {
         let mut results = Vec::new();
 
         for tool_call in tool_calls {
+            // Log the tool call
+            println!("=== TOOL CALL: {} ===", tool_call.name);
+            println!("Arguments: {}", serde_json::to_string_pretty(&tool_call.arguments).unwrap_or_else(|_| "{}".to_string()));
+            
             // Execute the tool
             let tool_result = self.execute_tool(tool_call).await;
             results.push((tool_call.clone(), tool_result));
