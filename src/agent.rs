@@ -245,6 +245,7 @@ impl Agent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_send_sync;
 
     #[test]
     fn test_agent_initialization() {
@@ -349,10 +350,23 @@ mod tests {
         assert!(true);
     }
 
+    /// Ensures Agent can be safely sent across thread boundaries for async task spawning.
     #[test]
     fn test_agent_is_send_and_sync() {
-        // Compile-time assertion that Agent implements Send + Sync
-        fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<Agent>();
+        assert_send_sync!(Agent);
+    }
+
+    /// Ensures Arc<Agent> can be safely sent across thread boundaries, which is common
+    /// for sharing agent instances between tasks.
+    #[test]
+    fn test_arc_agent_is_send_and_sync() {
+        assert_send_sync!(std::sync::Arc<Agent>);
+    }
+
+    /// Ensures Box<Agent> can be safely sent across thread boundaries, which is common
+    /// for dynamic dispatch of agent implementations.
+    #[test]
+    fn test_box_agent_is_send_and_sync() {
+        assert_send_sync!(Box<Agent>);
     }
 }

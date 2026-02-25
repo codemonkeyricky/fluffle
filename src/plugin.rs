@@ -56,6 +56,7 @@ inventory::collect!(&'static dyn Plugin);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_send_sync;
     use async_trait::async_trait;
     use serde_json::json;
     use std::sync::Arc;
@@ -79,11 +80,10 @@ mod tests {
         assert_eq!(tool.description(), "test tool");
     }
 
+    /// Ensures Tool trait objects can be safely sent across thread boundaries,
+    /// which is required for tool execution in async contexts across threads.
     #[test]
     fn test_tool_is_send_and_sync() {
-        // Compile-time assertion that dyn Tool implements Send + Sync
-        fn assert_send_sync<T: Send + Sync>() {}
-        // This will fail to compile if Tool doesn't have Send + Sync bounds
-        assert_send_sync::<Arc<dyn Tool>>();
+        assert_send_sync!(Arc<dyn Tool>);
     }
 }

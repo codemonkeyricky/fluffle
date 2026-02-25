@@ -37,12 +37,12 @@ pub fn create_provider(provider_type: &str, api_key: Option<&str>) -> Result<Box
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert_send_sync;
 
+    /// Ensures AI provider trait objects can be safely sent across thread boundaries,
+    /// which is required for multi-threaded async execution.
     #[test]
     fn test_ai_provider_is_send_and_sync() {
-        // Compile-time assertion that dyn AiProvider implements Send + Sync
-        fn assert_send_sync<T: Send + Sync>() {}
-        // This will fail to compile if AiProvider doesn't have Send + Sync bounds
-        assert_send_sync::<Box<dyn AiProvider>>();
+        assert_send_sync!(Box<dyn AiProvider>);
     }
 }

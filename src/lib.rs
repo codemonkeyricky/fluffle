@@ -25,6 +25,9 @@ pub mod ai;
 pub mod plugins;
 pub mod ui;
 
+#[cfg(test)]
+mod test_utils;
+
 // Re-export commonly used types
 pub use error::{Error, Result};
 pub use types::{ToolContext, ToolResult, ToolParameters};
