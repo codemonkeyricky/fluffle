@@ -2,8 +2,11 @@ use crate::agent::Agent;
 use crate::config::Config;
 use crate::error::Result;
 
+const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access to tools. Use tools to accomplish tasks when appropriate. When the user asks to explore or analyze a codebase, use the explore tool.";
+
 pub async fn run(config: Config, prompt: Option<String>) -> Result<()> {
     let mut agent = Agent::new(config.clone())?;
+    agent = agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?;
 
     let input = match prompt {
         Some(p) => p,

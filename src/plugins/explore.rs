@@ -41,7 +41,7 @@ impl Tool for ExploreTool {
     }
 
     fn description(&self) -> &'static str {
-        "Explore a codebase using a specialized subagent with code exploration expertise"
+        "Use this tool when the user asks to explore, analyze, or understand a codebase structure. Creates a specialized subagent that systematically examines files, directories, and code to provide comprehensive insights."
     }
 
     fn parameters(&self) -> ToolParameters {
@@ -50,7 +50,7 @@ impl Tool for ExploreTool {
             "properties": {
                 "description": {
                     "type": "string",
-                    "description": "Specific exploration goal or focus area",
+                    "description": "The exploration goal, e.g., 'analyze project structure', 'find all API endpoints', 'understand dependencies'",
                     "default": "Explore the codebase structure and provide insights"
                 }
             },
@@ -111,7 +111,7 @@ mod tests {
     fn test_explore_tool_metadata() {
         let tool = ExploreTool;
         assert_eq!(tool.name(), "explore");
-        assert!(tool.description().contains("exploration"));
+        assert!(tool.description().to_lowercase().contains("explore"));
 
         let params = tool.parameters();
         assert!(params.is_object());
