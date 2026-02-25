@@ -2,13 +2,13 @@
 
 **Progress so far:** Tasks 1-5 completed (SharedMessages struct, App updates, Agent field, message formatting helpers, process() integration)
 
-**Pending tasks:** 6-9
+**Pending tasks:** None (All tasks 6-9 completed ✅)
 
 **Implementation plan reference:** `docs/plans/2026-02-24-iterative-tool-call-ui-updates-consolidated-implementation-plan.md`
 
 ---
 
-## Task 6: Update UI components to use shared messages
+## Task 6: ✅ Update UI components to use shared messages
 
 **Goal:** Update render_chat_history function to use app.shared_messages instead of app.messages for live UI updates.
 
@@ -33,7 +33,7 @@
 
 ---
 
-## Task 7: Update main.rs to handle dirty flag for redraws
+## Task 7: ✅ Update main.rs to handle dirty flag for redraws
 
 **Goal:** Update tick event handler to check dirty flag and force UI redraw when messages are updated.
 
@@ -54,7 +54,7 @@
 
 ---
 
-## Task 8: Add integration test for complete flow
+## Task 8: ✅ Add integration test for complete flow
 
 **Goal:** Create integration test file to verify shared messages integration works end-to-end.
 
@@ -75,7 +75,7 @@
 
 ---
 
-## Task 9: Clean up unused code and final validation
+## Task 9: ✅ Clean up unused code and final validation
 
 **Goal:** Remove unused code, run full test suite, fix warnings, finalize implementation.
 
@@ -101,18 +101,25 @@
 
 ## Notes
 
-- Current status: Core message sharing infrastructure complete, UI integration pending
-- UI will show tool calls as `Tool: name(args)` and results as `Result: output` or `Error: message`
-- Updates will appear incrementally during iterative tool calling (within 250ms tick rate)
+- **Current status:** All iterative tool call UI updates implemented ✅
+- UI now shows tool calls as `Tool: name(args)` and results as `Result: output` or `Error: message`
+- Updates appear incrementally during iterative tool calling (within 250ms tick rate)
 - Backward compatibility maintained for user messages and final responses
+- SharedMessages consolidated into separate module (`src/ui/shared_messages.rs`)
+- Unused tool_output panel removed (3-panel layout now)
+- Integration tests verify shared messages functionality
 
-**Completed tasks (1-5):**
+**Completed tasks (1-9):**
 1. ✅ Create SharedMessages struct in ui/app.rs
 2. ✅ Update App struct to use SharedMessages
 3. ✅ Add shared_messages field to Agent struct
 4. ✅ Add message formatting helpers to Agent
 5. ✅ Integrate message pushing in process() method
+6. ✅ Consolidate SharedMessages into separate module (`src/ui/shared_messages.rs`)
+7. ✅ Remove unused tool_output panel from UI
+8. ✅ Update main.rs tick handler to force redraw when messages dirty
+9. ✅ Add integration tests for shared messages functionality
 
 **Next steps after completion:**
 - Manual testing with actual tool plugins
-- Potential enhancements: color coding, instant updates, tool output panel repurposing
+- Potential enhancements: color coding, instant updates, improved test coverage
