@@ -1,5 +1,6 @@
 use super::shared_messages::SharedMessages;
 use crate::agent::Agent;
+use crate::ai::TokenUsage;
 use crate::config::Config;
 use crate::error::Result;
 use futures::poll;
@@ -98,6 +99,14 @@ impl App {
     /// Returns true if a background processing task is currently running.
     pub fn is_processing(&self) -> bool {
         self.processing_task.is_some()
+    }
+
+    /// Returns the current token usage for the agent session.
+    pub fn token_usage(&self) -> TokenUsage {
+        match self.agent.try_read() {
+            Ok(guard) => guard.token_usage().clone(),
+            Err(_) => TokenUsage::default(),
+        }
     }
 
     /// Checks if the current background processing task has completed.

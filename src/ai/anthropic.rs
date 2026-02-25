@@ -2,7 +2,7 @@
 //!
 //! This module provides an `AiProvider` implementation using the Anthropic API.
 
-use crate::ai::{AiProvider, AiResponse, Message, ToolCall, ToolDefinition};
+use crate::ai::{AiProvider, AiResponse, Message, TokenUsage, ToolCall, ToolDefinition};
 use crate::error::{Error, Result};
 use anthropic_sdk::{Client, ToolChoice};
 use async_trait::async_trait;
@@ -119,6 +119,12 @@ impl AnthropicProvider {
             }
         }
 
+        let token_usage = v.get("usage").and_then(|u| {
+            let input = u.get("input_tokens")?.as_u64()? as u32;
+            let output = u.get("output_tokens")?.as_u64()? as u32;
+            Some(TokenUsage::new(input, output))
+        });
+
         let content = v
             .get("content")
             .and_then(|c| c.as_array())
@@ -164,6 +170,7 @@ impl AnthropicProvider {
         Ok(AiResponse {
             content: combined_text,
             tool_calls,
+            token_usage,
         })
     }
 }

@@ -1,4 +1,4 @@
-use crate::ai::{create_provider, AiProvider, Message, ToolCall, ToolDefinition};
+use crate::ai::{create_provider, AiProvider, Message, TokenUsage, ToolCall, ToolDefinition};
 use crate::config::Config;
 use crate::error::Result;
 use crate::types::{ToolContext, ToolResult};
@@ -13,6 +13,7 @@ pub struct Agent {
     history: Vec<Message>,
     shared_messages: Option<Arc<SharedMessages>>,
     system_prompt: Option<String>,
+    token_usage: TokenUsage,
 }
 
 impl Agent {
@@ -37,11 +38,20 @@ impl Agent {
             history: Vec::new(),
             shared_messages: None,
             system_prompt: None,
+            token_usage: TokenUsage::default(),
         })
     }
 
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    pub fn token_usage(&self) -> &TokenUsage {
+        &self.token_usage
+    }
+
+    pub fn reset_token_usage(&mut self) {
+        self.token_usage = TokenUsage::default();
     }
 
     pub fn set_shared_messages(&mut self, shared: Arc<SharedMessages>) {
@@ -69,6 +79,7 @@ impl Agent {
             history,
             shared_messages: None,
             system_prompt,
+            token_usage: TokenUsage::default(),
         })
     }
 
@@ -86,6 +97,7 @@ impl Agent {
             history: Vec::new(),
             shared_messages: None,
             system_prompt: None,
+            token_usage: TokenUsage::default(),
         })
     }
 
@@ -161,6 +173,22 @@ impl Agent {
                 .ai_provider
                 .complete_with_tools(&self.history, &tool_definitions)
                 .await?;
+
+            // Accumulate token usage
+            if let Some(usage) = ai_response.token_usage {
+                println!("=== TOKEN USAGE ===");
+                println!(
+                    "Prompt tokens: {}, Completion tokens: {}, Total tokens: {}",
+                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+                );
+                self.token_usage += usage.clone();
+                println!(
+                    "Cumulative: prompt: {}, completion: {}, total: {}",
+                    self.token_usage.prompt_tokens,
+                    self.token_usage.completion_tokens,
+                    self.token_usage.total_tokens
+                );
+            }
 
             // Check if we have a final response (no tool calls)
             if ai_response.tool_calls.is_empty() {

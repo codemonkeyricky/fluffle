@@ -76,6 +76,7 @@ pub struct ToolDefinition {
 pub struct AiResponse {
     pub content: String,
     pub tool_calls: Vec<ToolCall>,
+    pub token_usage: Option<TokenUsage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,4 +84,42 @@ pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub arguments: Value,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TokenUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
+impl TokenUsage {
+    pub fn new(prompt_tokens: u32, completion_tokens: u32) -> Self {
+        let total_tokens = prompt_tokens + completion_tokens;
+        Self {
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        }
+    }
+}
+
+impl std::ops::Add for TokenUsage {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            prompt_tokens: self.prompt_tokens + other.prompt_tokens,
+            completion_tokens: self.completion_tokens + other.completion_tokens,
+            total_tokens: self.total_tokens + other.total_tokens,
+        }
+    }
+}
+
+impl std::ops::AddAssign for TokenUsage {
+    fn add_assign(&mut self, other: Self) {
+        self.prompt_tokens += other.prompt_tokens;
+        self.completion_tokens += other.completion_tokens;
+        self.total_tokens += other.total_tokens;
+    }
 }

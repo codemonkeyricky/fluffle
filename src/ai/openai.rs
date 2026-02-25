@@ -2,7 +2,7 @@
 //!
 //! This module provides an `AiProvider` implementation using the OpenAI API.
 
-use crate::ai::{AiProvider, AiResponse, Message, ToolCall, ToolDefinition};
+use crate::ai::{AiProvider, AiResponse, Message, TokenUsage, ToolCall, ToolDefinition};
 use crate::error::{Error, Result};
 use async_openai::{
     config::OpenAIConfig,
@@ -181,9 +181,14 @@ impl AiProvider for OpenAiProvider {
             })
             .collect();
 
+        let token_usage = response
+            .usage
+            .map(|usage| TokenUsage::new(usage.prompt_tokens, usage.completion_tokens));
+
         Ok(AiResponse {
             content,
             tool_calls,
+            token_usage,
         })
     }
 }

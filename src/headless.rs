@@ -21,6 +21,12 @@ pub async fn run(config: Config, prompt: Option<String>) -> Result<()> {
     let response = agent.process(&input).await?;
 
     println!("{}", response);
+    println!(
+        "Tokens used: prompt: {}, completion: {}, total: {}",
+        agent.token_usage().prompt_tokens,
+        agent.token_usage().completion_tokens,
+        agent.token_usage().total_tokens
+    );
 
     Ok(())
 }
