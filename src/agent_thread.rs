@@ -14,39 +14,24 @@ pub fn spawn(
     config: Config,
     ui_tx: mpsc::Sender<AgentToUi>,
 ) -> mpsc::Sender<UiToAgent> {
-    let (agent_tx, mut agent_rx) = mpsc::channel(100);
+    let (agent_tx, agent_rx) = mpsc::channel(100);
 
+    // Clone ui_tx for error reporting before moving into agent
+    let ui_tx_clone = ui_tx.clone();
     tokio::spawn(async move {
-        // Create agent with channel for updates
-        let mut agent = match Agent::new_with_channel(config, ui_tx.clone()) {
+        // Create agent with both channels
+        let mut agent = match Agent::new_with_channels(config, ui_tx, agent_rx) {
             Ok(agent) => agent,
             Err(e) => {
-                let _ = ui_tx.send(AgentToUi::Error(e.to_string())).await;
+                let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
                 return;
             }
         };
 
-        while let Some(request) = agent_rx.recv().await {
-            match request {
-                UiToAgent::Request(input) => {
-                    // Process the request
-                    match agent.process(&input).await {
-                        Ok(response) => {
-                            let _ = ui_tx.send(AgentToUi::Response(response)).await;
-                            let _ = ui_tx.send(AgentToUi::TokenUsage(agent.token_usage().clone())).await;
-                        }
-                        Err(e) => {
-                            let _ = ui_tx.send(AgentToUi::Error(e.to_string())).await;
-                        }
-                    }
-                }
-                UiToAgent::Shutdown => {
-                    // Graceful shutdown
-                    break;
-                }
-            }
+        // Run agent; this will block until shutdown or channel closed
+        if let Err(e) = agent.run().await {
+            let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
         }
-        // Channel closed, UI disconnected
     });
 
     agent_tx
@@ -58,29 +43,17 @@ pub fn spawn_with_agent(
     mut agent: Agent,
     ui_tx: mpsc::Sender<AgentToUi>,
 ) -> mpsc::Sender<UiToAgent> {
-    let (agent_tx, mut agent_rx) = mpsc::channel(100);
+    let (agent_tx, agent_rx) = mpsc::channel(100);
     
-    // Set channel on agent
-    agent.set_channel_tx(ui_tx.clone());
+    // Set channels on agent
+    agent.set_agent_to_ui_tx(ui_tx.clone());
+    agent.set_ui_to_agent_rx(agent_rx);
     
+    let ui_tx_clone = ui_tx.clone();
     tokio::spawn(async move {
-        while let Some(request) = agent_rx.recv().await {
-            match request {
-                UiToAgent::Request(input) => {
-                    match agent.process(&input).await {
-                        Ok(response) => {
-                            let _ = ui_tx.send(AgentToUi::Response(response)).await;
-                            let _ = ui_tx.send(AgentToUi::TokenUsage(agent.token_usage().clone())).await;
-                        }
-                        Err(e) => {
-                            let _ = ui_tx.send(AgentToUi::Error(e.to_string())).await;
-                        }
-                    }
-                }
-                UiToAgent::Shutdown => {
-                    break;
-                }
-            }
+        // Run agent; this will block until shutdown or channel closed
+        if let Err(e) = agent.run().await {
+            let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
         }
     });
     

@@ -1,7 +1,7 @@
 use crate::ai::{create_provider, AiProvider, Message, TokenUsage, ToolCall, ToolDefinition};
 use crate::config::Config;
 use crate::error::Result;
-use crate::messaging::AgentToUi;
+use crate::messaging::{AgentToUi, UiToAgent};
 use crate::types::{ToolContext, ToolResult};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -12,7 +12,8 @@ pub struct Agent {
     context: ToolContext,
     ai_provider: Box<dyn AiProvider>,
     history: Vec<Message>,
-    channel_tx: Option<mpsc::Sender<AgentToUi>>,
+    agent_to_ui_tx: Option<mpsc::Sender<AgentToUi>>,
+    ui_to_agent_rx: Option<mpsc::Receiver<UiToAgent>>,
     system_prompt: Option<String>,
     token_usage: TokenUsage,
 }
@@ -37,15 +38,21 @@ impl Agent {
             context,
             ai_provider,
             history: Vec::new(),
-            channel_tx: None,
+            agent_to_ui_tx: None,
+            ui_to_agent_rx: None,
             system_prompt: None,
             token_usage: TokenUsage::default(),
         })
     }
 
-    pub fn new_with_channel(config: Config, channel_tx: mpsc::Sender<AgentToUi>) -> Result<Self> {
+    pub fn new_with_channels(
+        config: Config,
+        agent_to_ui_tx: mpsc::Sender<AgentToUi>,
+        ui_to_agent_rx: mpsc::Receiver<UiToAgent>,
+    ) -> Result<Self> {
         let mut agent = Self::new(config)?;
-        agent.channel_tx = Some(channel_tx);
+        agent.agent_to_ui_tx = Some(agent_to_ui_tx);
+        agent.ui_to_agent_rx = Some(ui_to_agent_rx);
         Ok(agent)
     }
 
@@ -61,8 +68,49 @@ impl Agent {
         self.token_usage = TokenUsage::default();
     }
 
-    pub fn set_channel_tx(&mut self, tx: mpsc::Sender<AgentToUi>) {
-        self.channel_tx = Some(tx);
+    pub fn set_agent_to_ui_tx(&mut self, tx: mpsc::Sender<AgentToUi>) {
+        self.agent_to_ui_tx = Some(tx);
+    }
+
+    pub fn set_ui_to_agent_rx(&mut self, rx: mpsc::Receiver<UiToAgent>) {
+        self.ui_to_agent_rx = Some(rx);
+    }
+
+    /// Run the agent, blocking on messages from UI and processing them serially.
+    /// Requires both channels to be set via `set_agent_to_ui_tx` and `set_ui_to_agent_rx`.
+    /// Sends responses, errors, and token usage back via `agent_to_ui_tx`.
+    pub async fn run(&mut self) -> Result<()> {
+        // Verify channels are set
+        if self.ui_to_agent_rx.is_none() {
+            return Err(crate::error::Error::Agent("ui_to_agent_rx not set".to_string()));
+        }
+        if self.agent_to_ui_tx.is_none() {
+            return Err(crate::error::Error::Agent("agent_to_ui_tx not set".to_string()));
+        }
+
+        loop {
+            let request = match self.ui_to_agent_rx.as_mut().unwrap().recv().await {
+                Some(req) => req,
+                None => break,
+            };
+            match request {
+                UiToAgent::Request(input) => {
+                    match self.process(&input).await {
+                        Ok(response) => {
+                            let _ = self.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Response(response)).await;
+                            let _ = self.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::TokenUsage(self.token_usage().clone())).await;
+                        }
+                        Err(e) => {
+                            let _ = self.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Error(e.to_string())).await;
+                        }
+                    }
+                }
+                UiToAgent::Shutdown => {
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Create a new agent with the same configuration and tools but a custom system prompt.
@@ -84,7 +132,8 @@ impl Agent {
             context: self.context.clone(),
             ai_provider,
             history,
-            channel_tx: None,
+            agent_to_ui_tx: None,
+            ui_to_agent_rx: None,
             system_prompt,
             token_usage: TokenUsage::default(),
         })
@@ -102,7 +151,8 @@ impl Agent {
             context,
             ai_provider,
             history: Vec::new(),
-            channel_tx: None,
+            agent_to_ui_tx: None,
+            ui_to_agent_rx: None,
             system_prompt: None,
             token_usage: TokenUsage::default(),
         })
@@ -277,7 +327,7 @@ impl Agent {
 
     /// Helper to push tool call message to shared messages
     async fn push_tool_call(&self, name: &str, arguments: &serde_json::Value) {
-        if let Some(tx) = &self.channel_tx {
+        if let Some(tx) = &self.agent_to_ui_tx {
             let args_str =
                 serde_json::to_string_pretty(arguments).unwrap_or_else(|_| "{}".to_string());
             let msg = format!("Tool: {}({})", name, args_str);
@@ -287,7 +337,7 @@ impl Agent {
 
     /// Helper to push tool result message to UI channel
     async fn push_tool_result(&self, success: bool, output: &str) {
-        if let Some(tx) = &self.channel_tx {
+        if let Some(tx) = &self.agent_to_ui_tx {
             let prefix = if success { "Result:" } else { "Error:" };
             let msg = format!("{} {}", prefix, output);
             let message = if success {
@@ -400,57 +450,9 @@ mod tests {
         assert_eq!(stored_config.api_key, config.api_key);
     }
 
-    #[test]
-    #[ignore]
-    fn test_agent_accepts_shared_messages() {
-        use crate::ui::SharedMessages;
-        use std::sync::Arc;
 
-        let config = Config {
-            model: "gpt-4".to_string(),
-            api_key: None,
-            provider: "openai".to_string(),
-            max_tokens: 4096,
-            temperature: 0.7,
-            max_tool_iterations: 10,
-        };
 
-        let mut agent = Agent::new(config).expect("Agent initialization failed");
 
-        // This should compile once set_shared_messages is added
-        let shared = Arc::new(SharedMessages::new());
-        agent.set_shared_messages(shared);
-
-        assert!(true);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_agent_message_formatting() {
-        use crate::ui::SharedMessages;
-        use serde_json::json;
-        use std::sync::Arc;
-
-        let config = Config {
-            model: "gpt-4".to_string(),
-            api_key: None,
-            provider: "openai".to_string(),
-            max_tokens: 4096,
-            temperature: 0.7,
-            max_tool_iterations: 10,
-        };
-
-        let mut agent = Agent::new(config).expect("Agent initialization failed");
-        let shared = Arc::new(SharedMessages::new());
-        agent.set_shared_messages(shared.clone());
-
-        // Test tool call formatting
-        let _args = json!({"path": "src/main.rs"});
-        // We can't test private methods directly
-        // This test just verifies agent compiles with helpers
-
-        assert!(true);
-    }
 
     #[tokio::test]
     async fn test_agent_pushes_tool_messages_during_iteration() {
