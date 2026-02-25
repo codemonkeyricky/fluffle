@@ -112,7 +112,11 @@ async fn main() -> Result<()> {
                     _ => {} // Ignore other keys
                 },
                 Ok(Event::Tick) => {
-                    // Update status or other periodic tasks
+                    // Force redraw if messages have been updated
+                    if app.shared_messages.is_dirty() {
+                        // Break out of match to trigger redraw on next iteration
+                        continue;
+                    }
                 }
                 Err(_) => {
                     // Channel disconnected, break loop
