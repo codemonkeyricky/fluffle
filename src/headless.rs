@@ -2,10 +2,13 @@ use crate::agent::Agent;
 use crate::config::Config;
 use crate::error::Result;
 
-pub async fn run(config: Config) -> Result<()> {
+pub async fn run(config: Config, prompt: Option<String>) -> Result<()> {
     let mut agent = Agent::new(config.clone())?;
 
-    let input = read_input()?;
+    let input = match prompt {
+        Some(p) => p,
+        None => read_input()?,
+    };
 
     if input.trim().is_empty() {
         println!("No input provided. Exiting.");
