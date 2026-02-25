@@ -21,6 +21,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 futures = "0.3"
 dirs = "5.0"
+structopt = "0.3"
 
 [dev-dependencies]
 tokio-test = "0.4"

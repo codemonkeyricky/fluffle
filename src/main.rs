@@ -1,5 +1,6 @@
 use nanocode::ui::{App, Event, EventHandler};
 use nanocode::error::Result;
+use nanocode::headless;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers},
@@ -7,6 +8,41 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::io;
+use structopt::StructOpt;
+
+#[derive(StructOpt)]
+#[structopt(name = "nanocode")]
+struct Args {
+    #[structopt(short, long, help = "Run in headless mode (stdout/stdin)")]
+    headless: bool,
+}
+
+fn parse_args(args: std::env::Args) -> Args {
+    let args = args.collect::<Vec<_>>();
+    let mut headless = false;
+
+    let mut i = 1;
+    while i < args.len() {
+        if args[i] == "-p" || args[i] == "--headless" {
+            headless = true;
+            i += 1;
+        } else if args[i] == "-h" || args[i] == "--help" {
+            println!("nanocode 0.1.0");
+            println!();
+            println!("USAGE:");
+            println!("    nanocode [FLAGS]");
+            println!();
+            println!("FLAGS:");
+            println!("        --help        Prints help information");
+            println!("    -h, --headless    Run in headless mode (stdout/stdin)");
+            std::process::exit(0);
+        } else {
+            i += 1;
+        }
+    }
+
+    Args { headless }
+}
 
 /// Guard that ensures terminal state is restored when dropped.
 struct TerminalGuard {
@@ -16,25 +52,20 @@ struct TerminalGuard {
 impl TerminalGuard {
     /// Setup terminal and return guard that will restore on drop.
     fn setup() -> Result<Self> {
-        // Enable raw mode - if this fails, no cleanup needed
         enable_raw_mode()?;
 
-        // Enter alternate screen and enable mouse capture
         let mut stdout = io::stdout();
         match execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
             Ok(_) => {}
             Err(e) => {
-                // Cleanup: leave alternate screen and disable mouse capture
                 let _ = execute!(stdout, LeaveAlternateScreen, DisableMouseCapture);
                 let _ = disable_raw_mode();
                 return Err(e.into());
             }
         }
 
-        // Create terminal backend
         let backend = CrosstermBackend::new(stdout);
 
-        // Create terminal - if this fails, cleanup alternate screen and raw mode
         let terminal = match Terminal::new(backend) {
             Ok(terminal) => terminal,
             Err(e) => {
@@ -47,8 +78,6 @@ impl TerminalGuard {
         Ok(Self { terminal: Some(terminal) })
     }
 
-    /// Get mutable reference to terminal.
-    /// Panics if terminal has been taken.
     fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<io::Stdout>> {
         self.terminal.as_mut().expect("terminal should be present")
     }
@@ -56,7 +85,6 @@ impl TerminalGuard {
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        // Restore terminal state
         let _ = disable_raw_mode();
         if let Some(terminal) = &mut self.terminal {
             let _ = execute!(
@@ -66,7 +94,6 @@ impl Drop for TerminalGuard {
             );
             let _ = terminal.show_cursor();
         } else {
-            // Terminal was taken, still attempt to restore stdout
             let _ = execute!(
                 io::stdout(),
                 LeaveAlternateScreen,
@@ -78,66 +105,63 @@ impl Drop for TerminalGuard {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Setup terminal with guard
-    let mut guard = TerminalGuard::setup()?;
+    let args = parse_args(std::env::args());
 
-    // Create app
-    let mut app = App::new().await?;
-    let mut event_handler = EventHandler::new(250);
+    if args.headless {
+        let config = nanocode::config::Config::load().await?;
+        headless::run(config).await
+    } else {
+        let mut guard = TerminalGuard::setup()?;
+        let mut app = App::new().await?;
+        let mut event_handler = EventHandler::new(250);
 
 
-    // Main loop
-    let result = async {
-        loop {
-            guard.terminal_mut().draw(|f| {
-                nanocode::ui::components::render(f, &app);
-            })?;
+        let result = async {
+            loop {
+                guard.terminal_mut().draw(|f| {
+                    nanocode::ui::components::render(f, &app);
+                })?;
 
-            match event_handler.next().await {
-                Some(Event::Key(key)) => match key.code {
-                    KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        app.quit();
-                    }
-                    KeyCode::Enter => {
-                        app.handle_input().await?;
-                    }
-                    KeyCode::Char(c) => {
-                        app.input.push(c);
-                    }
-                    KeyCode::Backspace => {
-                        app.input.pop();
-                    }
-                    _ => {} // Ignore other keys
-                },
-                Some(Event::Tick) => {
-                    // Check if background task completed
-                    if app.check_task_completion().await {
-                        // Task completed, redraw to show final result
-                        continue;
-                    }
+                match event_handler.next().await {
+                    Some(Event::Key(key)) => match key.code {
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                            app.quit();
+                        }
+                        KeyCode::Enter => {
+                            app.handle_input().await?;
+                        }
+                        KeyCode::Char(c) => {
+                            app.input.push(c);
+                        }
+                        KeyCode::Backspace => {
+                            app.input.pop();
+                        }
+                        _ => {}
+                    },
+                    Some(Event::Tick) => {
+                        if app.check_task_completion().await {
+                            continue;
+                        }
 
-                    // Force redraw if messages have been updated
-                    if app.shared_messages.is_dirty() {
-                        continue;
+                        if app.shared_messages.is_dirty() {
+                            continue;
+                        }
+                    }
+                    Some(Event::TaskCompleted) => {
+                    }
+                    None => {
+                        break;
                     }
                 }
-                Some(Event::TaskCompleted) => {
-                    // Handle task completion (will be implemented in Task 3)
-                }
-                None => {
-                    // Channel disconnected, break loop
+
+                if app.should_quit {
                     break;
                 }
             }
+            Ok(())
+        }.await;
 
-            if app.should_quit {
-                break;
-            }
-        }
-        Ok(())
-    }.await;
-
-    // Explicitly drop guard to restore terminal before returning
-    drop(guard);
-    result
+        drop(guard);
+        result
+    }
 }

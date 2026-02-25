@@ -24,6 +24,7 @@ pub mod agent;
 pub mod ai;
 pub mod plugins;
 pub mod ui;
+pub mod headless;
 
 #[cfg(test)]
 mod test_utils;
