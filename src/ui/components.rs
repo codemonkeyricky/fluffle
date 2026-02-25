@@ -11,17 +11,15 @@ pub fn render(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(60),
-            Constraint::Percentage(20),
+            Constraint::Percentage(75),
             Constraint::Length(3),
             Constraint::Length(1),
         ])
         .split(frame.size());
 
     render_chat_history(frame, chunks[0], app);
-    render_tool_output(frame, chunks[1], app);
-    render_input(frame, chunks[2], app);
-    render_status_bar(frame, chunks[3], app);
+    render_input(frame, chunks[1], app);
+    render_status_bar(frame, chunks[2], app);
 }
 
 fn render_chat_history(frame: &mut Frame, area: Rect, app: &App) {
@@ -41,13 +39,6 @@ fn render_chat_history(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(history, area);
 }
 
-fn render_tool_output(frame: &mut Frame, area: Rect, app: &App) {
-    let output = Paragraph::new(app.tool_output.as_str())
-        .block(Block::default().borders(Borders::ALL).title("Tool Output"))
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(output, area);
-}
 
 fn render_input(frame: &mut Frame, area: Rect, app: &App) {
     let input = Paragraph::new(app.input.as_str())

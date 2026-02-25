@@ -7,7 +7,6 @@ use super::shared_messages::SharedMessages;
 pub struct App {
     pub agent: Agent,
     pub shared_messages: Arc<SharedMessages>,
-    pub tool_output: String,
     pub input: String,
     pub should_quit: bool,
     pub status: StatusInfo,
@@ -39,7 +38,6 @@ impl App {
         Ok(Self {
             agent,
             shared_messages,
-            tool_output: String::new(),
             input: String::new(),
             should_quit: false,
             status,
