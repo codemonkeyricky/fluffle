@@ -85,8 +85,6 @@ async fn main() -> Result<()> {
     let mut app = App::new().await?;
     let event_handler = EventHandler::new(250);
 
-    // Update plugin count (already set in App::new, but refresh for consistency)
-    app.status.plugins_loaded = app.agent.read().await.tools().len();
 
     // Main loop
     let result = async {

@@ -13,6 +13,7 @@ pub struct App {
     pub should_quit: bool,
     pub status: StatusInfo,
     pub processing_task: Option<JoinHandle<Result<String>>>,
+    // TODO: Consider storing errors as well (Option<Result<String>> or separate error field)
     pub pending_result: Option<String>,
 }
 
