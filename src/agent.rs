@@ -348,4 +348,11 @@ mod tests {
         // We'll trust integration tests later
         assert!(true);
     }
+
+    #[test]
+    fn test_agent_is_send_and_sync() {
+        // Compile-time assertion that Agent implements Send + Sync
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Agent>();
+    }
 }

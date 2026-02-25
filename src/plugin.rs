@@ -58,6 +58,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use serde_json::json;
+    use std::sync::Arc;
 
     #[test]
     fn test_tool_trait_methods() {
@@ -76,5 +77,13 @@ mod tests {
         let tool = TestTool;
         assert_eq!(tool.name(), "test");
         assert_eq!(tool.description(), "test tool");
+    }
+
+    #[test]
+    fn test_tool_is_send_and_sync() {
+        // Compile-time assertion that dyn Tool implements Send + Sync
+        fn assert_send_sync<T: Send + Sync>() {}
+        // This will fail to compile if Tool doesn't have Send + Sync bounds
+        assert_send_sync::<Arc<dyn Tool>>();
     }
 }

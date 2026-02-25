@@ -33,3 +33,16 @@ pub fn create_provider(provider_type: &str, api_key: Option<&str>) -> Result<Box
         _ => Err(crate::error::Error::Ai(format!("Unsupported provider: {}", provider_type))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ai_provider_is_send_and_sync() {
+        // Compile-time assertion that dyn AiProvider implements Send + Sync
+        fn assert_send_sync<T: Send + Sync>() {}
+        // This will fail to compile if AiProvider doesn't have Send + Sync bounds
+        assert_send_sync::<Box<dyn AiProvider>>();
+    }
+}
