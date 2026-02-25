@@ -1,6 +1,6 @@
+use crate::ai::{create_provider, AiProvider, Message, ToolCall, ToolDefinition};
 use crate::config::Config;
 use crate::error::Result;
-use crate::ai::{AiProvider, create_provider, Message, ToolDefinition, ToolCall};
 use crate::types::{ToolContext, ToolResult};
 use crate::ui::SharedMessages;
 use std::sync::Arc;
@@ -10,8 +10,9 @@ pub struct Agent {
     tools: Vec<Arc<dyn crate::plugin::Tool>>,
     context: ToolContext,
     ai_provider: Box<dyn AiProvider>,
-    conversation_history: Vec<Message>,
+    history: Vec<Message>,
     shared_messages: Option<Arc<SharedMessages>>,
+    system_prompt: Option<String>,
 }
 
 impl Agent {
@@ -21,8 +22,7 @@ impl Agent {
 
         // Create default context (current directory, empty permissions)
         let context = crate::types::ToolContext {
-            working_directory: std::env::current_dir()
-                .map_err(|e| crate::error::Error::Io(e))?,
+            working_directory: std::env::current_dir().map_err(|e| crate::error::Error::Io(e))?,
             permissions: Vec::new(),
         };
 
@@ -34,8 +34,9 @@ impl Agent {
             tools,
             context,
             ai_provider,
-            conversation_history: Vec::new(),
+            history: Vec::new(),
             shared_messages: None,
+            system_prompt: None,
         })
     }
 
@@ -45,6 +46,58 @@ impl Agent {
 
     pub fn set_shared_messages(&mut self, shared: Arc<SharedMessages>) {
         self.shared_messages = Some(shared);
+    }
+
+    /// Create a new agent with the same configuration and tools but a custom system prompt.
+    /// The new agent will have its own conversation history starting with the system prompt.
+    pub fn with_system_prompt(&self, system_prompt: Option<String>) -> Result<Self> {
+        let mut history = Vec::new();
+
+        // Add system prompt as first message if provided
+        if let Some(prompt) = &system_prompt {
+            history.push(Message::user(prompt));
+        }
+
+        // Create new AI provider with same configuration
+        let ai_provider = create_provider(&self.config.provider, self.config.api_key.as_deref())?;
+
+        Ok(Self {
+            config: self.config.clone(),
+            tools: self.tools.clone(),
+            context: self.context.clone(),
+            ai_provider,
+            history,
+            shared_messages: None,
+            system_prompt,
+        })
+    }
+
+    /// Create a new agent with a custom context (working directory and permissions).
+    /// Useful for creating subagents that should operate in a specific directory.
+    pub fn with_context(&self, context: ToolContext) -> Result<Self> {
+        // Create new AI provider with same configuration
+        let ai_provider = create_provider(&self.config.provider, self.config.api_key.as_deref())?;
+
+        Ok(Self {
+            config: self.config.clone(),
+            tools: self.tools.clone(),
+            context,
+            ai_provider,
+            history: Vec::new(),
+            shared_messages: None,
+            system_prompt: None,
+        })
+    }
+
+    /// Set the agent's context (working directory and permissions).
+    /// This is useful for subagents that need to operate in a specific directory.
+    pub fn set_context(&mut self, context: ToolContext) {
+        self.context = context;
+    }
+
+    /// Get the system prompt, if any.
+    pub fn system_prompt(&self) -> Option<&str> {
+        self.system_prompt.as_deref()
     }
 
     /// Discover all tools registered via the plugin inventory.
@@ -90,7 +143,7 @@ impl Agent {
     /// the AI to see and respond to errors in subsequent iterations.
     pub async fn process(&mut self, user_message: &str) -> Result<String> {
         // Add user message to conversation history
-        self.conversation_history.push(Message::user(user_message));
+        self.history.push(Message::user(user_message));
 
         let mut iteration = 0;
 
@@ -104,24 +157,22 @@ impl Agent {
             let tool_definitions = self.tools_to_definitions();
 
             // Get AI response with tools
-            let ai_response = self.ai_provider.complete_with_tools(
-                &self.conversation_history,
-                &tool_definitions,
-            ).await?;
+            let ai_response = self
+                .ai_provider
+                .complete_with_tools(&self.history, &tool_definitions)
+                .await?;
 
             // Check if we have a final response (no tool calls)
             if ai_response.tool_calls.is_empty() {
-                self.conversation_history.push(Message::assistant(&ai_response.content));
+                self.history.push(Message::assistant(&ai_response.content));
                 return Ok(ai_response.content);
             }
 
             // We have tool calls - add assistant message with calls to history
-            self.conversation_history.push(
-                Message::assistant_with_tool_calls(
-                    &ai_response.content,
-                    ai_response.tool_calls.clone(),
-                )
-            );
+            self.history.push(Message::assistant_with_tool_calls(
+                &ai_response.content,
+                ai_response.tool_calls.clone(),
+            ));
 
             // Push tool call messages to UI
             for tool_call in &ai_response.tool_calls {
@@ -139,10 +190,13 @@ impl Agent {
                 } else {
                     Message::tool(
                         &tool_call.id,
-                        &format!("Error: {}", result.error_message().unwrap_or("Unknown error"))
+                        &format!(
+                            "Error: {}",
+                            result.error_message().unwrap_or("Unknown error")
+                        ),
                     )
                 };
-                self.conversation_history.push(tool_message);
+                self.history.push(tool_message);
             }
 
             // Push tool result messages to UI
@@ -153,7 +207,7 @@ impl Agent {
                         result.output()
                     } else {
                         result.error_message().unwrap_or("Unknown error")
-                    }
+                    },
                 );
             }
 
@@ -172,8 +226,12 @@ impl Agent {
         for tool_call in tool_calls {
             // Log the tool call
             println!("=== TOOL CALL: {} ===", tool_call.name);
-            println!("Arguments: {}", serde_json::to_string_pretty(&tool_call.arguments).unwrap_or_else(|_| "{}".to_string()));
-            
+            println!(
+                "Arguments: {}",
+                serde_json::to_string_pretty(&tool_call.arguments)
+                    .unwrap_or_else(|_| "{}".to_string())
+            );
+
             // Execute the tool
             let tool_result = self.execute_tool(tool_call).await;
             results.push((tool_call.clone(), tool_result));
@@ -185,8 +243,8 @@ impl Agent {
     /// Helper to push tool call message to shared messages
     fn push_tool_call(&self, name: &str, arguments: &serde_json::Value) {
         if let Some(shared) = &self.shared_messages {
-            let args_str = serde_json::to_string_pretty(arguments)
-                .unwrap_or_else(|_| "{}".to_string());
+            let args_str =
+                serde_json::to_string_pretty(arguments).unwrap_or_else(|_| "{}".to_string());
             let msg = format!("Tool: {}({})", name, args_str);
             shared.push(msg);
         }
@@ -207,13 +265,14 @@ impl Agent {
     /// `ToolDefinition` structs that can be passed to AI providers.
     /// Each definition includes the tool name, description, and parameter schema.
     fn tools_to_definitions(&self) -> Vec<ToolDefinition> {
-        self.tools.iter().map(|tool| {
-            ToolDefinition {
+        self.tools
+            .iter()
+            .map(|tool| ToolDefinition {
                 name: tool.name().to_string(),
                 description: tool.description().to_string(),
                 parameters: tool.parameters(),
-            }
-        }).collect()
+            })
+            .collect()
     }
 
     /// Execute a single tool call.
@@ -223,14 +282,14 @@ impl Agent {
     /// tool is not found.
     async fn execute_tool(&self, tool_call: &ToolCall) -> ToolResult {
         // Find the tool by name
-        let tool = match self.tools.iter()
-            .find(|t| t.name() == tool_call.name) {
+        let tool = match self.tools.iter().find(|t| t.name() == tool_call.name) {
             Some(tool) => tool,
             None => return ToolResult::error(format!("Tool not found: {}", tool_call.name)),
         };
 
         // Execute the tool with the provided arguments
-        tool.execute(&self.context, tool_call.arguments.clone()).await
+        tool.execute(&self.context, tool_call.arguments.clone())
+            .await
     }
 
     /// Get a reference to the agent's tools.
@@ -239,11 +298,9 @@ impl Agent {
     }
 
     /// Get a reference to the conversation history.
-    pub fn conversation_history(&self) -> &[Message] {
-        &self.conversation_history
+    pub fn history(&self) -> &[Message] {
+        &self.history
     }
-
-
 }
 
 #[cfg(test)]
@@ -267,7 +324,10 @@ mod tests {
         let agent = Agent::new(config).expect("Agent initialization failed");
 
         // Verify that tools were discovered (there should be some from plugins)
-        assert!(!agent.tools().is_empty(), "Agent should discover tools from plugins");
+        assert!(
+            !agent.tools().is_empty(),
+            "Agent should discover tools from plugins"
+        );
 
         // Verify context was created (we need to check through tools or add a context() method)
         // For now, just verify agent was created successfully
@@ -292,7 +352,10 @@ mod tests {
         assert_eq!(stored_config.provider, config.provider);
         assert_eq!(stored_config.max_tokens, config.max_tokens);
         assert_eq!(stored_config.temperature, config.temperature);
-        assert_eq!(stored_config.max_tool_iterations, config.max_tool_iterations);
+        assert_eq!(
+            stored_config.max_tool_iterations,
+            config.max_tool_iterations
+        );
         // Compare api_key (both are Option<String>)
         assert_eq!(stored_config.api_key, config.api_key);
     }
@@ -322,8 +385,8 @@ mod tests {
 
     #[test]
     fn test_agent_message_formatting() {
-        use serde_json::json;
         use crate::ui::SharedMessages;
+        use serde_json::json;
         use std::sync::Arc;
 
         let config = Config {
@@ -372,5 +435,52 @@ mod tests {
     #[test]
     fn test_box_agent_is_send_and_sync() {
         assert_send_sync!(Box<Agent>);
+    }
+
+    #[test]
+    fn test_agent_discovers_task_and_explore_tools() {
+        let config = Config {
+            model: "gpt-4".to_string(),
+            api_key: None,
+            provider: "openai".to_string(),
+            max_tokens: 4096,
+            temperature: 0.7,
+            max_tool_iterations: 10,
+        };
+
+        let agent = Agent::new(config).expect("Agent initialization failed");
+        let tool_names: Vec<&str> = agent.tools().iter().map(|t| t.name()).collect();
+
+        // Should have at least file_ops, bash_exec, git_ops, task, explore
+        assert!(tool_names.contains(&"task"), "Missing 'task' tool");
+        assert!(tool_names.contains(&"explore"), "Missing 'explore' tool");
+    }
+
+    #[test]
+    fn test_agent_with_system_prompt() {
+        let config = Config {
+            model: "gpt-4".to_string(),
+            api_key: None,
+            provider: "openai".to_string(),
+            max_tokens: 4096,
+            temperature: 0.7,
+            max_tool_iterations: 10,
+        };
+
+        let agent = Agent::new(config).expect("Agent initialization failed");
+        let system_prompt = Some("You are a helpful assistant".to_string());
+
+        let subagent = agent
+            .with_system_prompt(system_prompt.clone())
+            .expect("Failed to create subagent");
+
+        assert_eq!(subagent.system_prompt(), system_prompt.as_deref());
+        // System prompt should be added as first message in history
+        assert!(!subagent.history().is_empty());
+        assert_eq!(subagent.history().len(), 1);
+        // First message should be the system prompt as a user message
+        let first_msg = &subagent.history()[0];
+        assert!(matches!(first_msg.role, crate::ai::MessageRole::User));
+        assert!(first_msg.content.contains("helpful assistant"));
     }
 }

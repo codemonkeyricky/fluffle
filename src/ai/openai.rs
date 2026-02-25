@@ -2,21 +2,21 @@
 //!
 //! This module provides an `AiProvider` implementation using the OpenAI API.
 
+use crate::ai::{AiProvider, AiResponse, Message, ToolCall, ToolDefinition};
 use crate::error::{Error, Result};
-use crate::ai::{AiProvider, Message, ToolDefinition, AiResponse, ToolCall};
 use async_openai::{
     config::OpenAIConfig,
     types::chat::{
-        ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
-        ChatCompletionRequestAssistantMessage, ChatCompletionRequestToolMessage,
-        ChatCompletionRequestUserMessageContent, ChatCompletionRequestAssistantMessageContent,
-        ChatCompletionRequestToolMessageContent, ChatCompletionMessageToolCalls,
-        ChatCompletionMessageToolCall, ChatCompletionTools, ChatCompletionTool,
+        ChatCompletionMessageToolCall, ChatCompletionMessageToolCalls,
+        ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
+        ChatCompletionRequestMessage, ChatCompletionRequestToolMessage,
+        ChatCompletionRequestToolMessageContent, ChatCompletionRequestUserMessage,
+        ChatCompletionRequestUserMessageContent, ChatCompletionTool, ChatCompletionTools,
         FunctionCall, FunctionObject,
     },
 };
-use serde_json::json;
 use async_trait::async_trait;
+use serde_json::json;
 use std::env;
 
 pub struct OpenAiProvider {
@@ -38,79 +38,97 @@ impl OpenAiProvider {
         }
 
         let client = async_openai::Client::with_config(config);
-        Ok(Self { client, model: "gpt-4".to_string() })
+        Ok(Self {
+            client,
+            model: "gpt-4".to_string(),
+        })
     }
 
     fn convert_messages(messages: &[Message]) -> Vec<ChatCompletionRequestMessage> {
-        messages.iter().map(|msg| {
-            match msg.role {
-                crate::ai::MessageRole::User => {
-                    let user_message = ChatCompletionRequestUserMessage {
-                        content: ChatCompletionRequestUserMessageContent::Text(msg.content.clone()),
-                        name: None,
-                    };
-                    ChatCompletionRequestMessage::User(user_message)
-                }
-                crate::ai::MessageRole::Assistant => {
-                    // Convert tool calls from our format to OpenAI's format
-                    let tool_calls = if let Some(ref tool_calls) = msg.tool_calls {
-                        Some(
-                            tool_calls
-                                .iter()
-                                .map(|tc| {
-                                    // Convert arguments Value to JSON string
-                                    let arguments = serde_json::to_string(&tc.arguments)
-                                        .unwrap_or_else(|_| "{}".to_string());
+        messages
+            .iter()
+            .map(|msg| {
+                match msg.role {
+                    crate::ai::MessageRole::User => {
+                        let user_message = ChatCompletionRequestUserMessage {
+                            content: ChatCompletionRequestUserMessageContent::Text(
+                                msg.content.clone(),
+                            ),
+                            name: None,
+                        };
+                        ChatCompletionRequestMessage::User(user_message)
+                    }
+                    crate::ai::MessageRole::Assistant => {
+                        // Convert tool calls from our format to OpenAI's format
+                        let tool_calls = if let Some(ref tool_calls) = msg.tool_calls {
+                            Some(
+                                tool_calls
+                                    .iter()
+                                    .map(|tc| {
+                                        // Convert arguments Value to JSON string
+                                        let arguments = serde_json::to_string(&tc.arguments)
+                                            .unwrap_or_else(|_| "{}".to_string());
 
-                                    ChatCompletionMessageToolCalls::Function(
-                                        ChatCompletionMessageToolCall {
-                                            id: tc.id.clone(),
-                                            function: FunctionCall {
-                                                name: tc.name.clone(),
-                                                arguments,
+                                        ChatCompletionMessageToolCalls::Function(
+                                            ChatCompletionMessageToolCall {
+                                                id: tc.id.clone(),
+                                                function: FunctionCall {
+                                                    name: tc.name.clone(),
+                                                    arguments,
+                                                },
                                             },
-                                        },
-                                    )
-                                })
-                                .collect(),
-                        )
-                    } else {
-                        None
-                    };
+                                        )
+                                    })
+                                    .collect(),
+                            )
+                        } else {
+                            None
+                        };
 
-                    #[allow(deprecated)]
-                    let assistant_message = ChatCompletionRequestAssistantMessage {
-                        content: Some(ChatCompletionRequestAssistantMessageContent::Text(msg.content.clone())),
-                        refusal: None,
-                        name: None,
-                        audio: None,
-                        tool_calls,
-                        function_call: None,
-                    };
-                    ChatCompletionRequestMessage::Assistant(assistant_message)
+                        #[allow(deprecated)]
+                        let assistant_message = ChatCompletionRequestAssistantMessage {
+                            content: Some(ChatCompletionRequestAssistantMessageContent::Text(
+                                msg.content.clone(),
+                            )),
+                            refusal: None,
+                            name: None,
+                            audio: None,
+                            tool_calls,
+                            function_call: None,
+                        };
+                        ChatCompletionRequestMessage::Assistant(assistant_message)
+                    }
+                    crate::ai::MessageRole::Tool => {
+                        let tool_message = ChatCompletionRequestToolMessage {
+                            content: ChatCompletionRequestToolMessageContent::Text(
+                                msg.content.clone(),
+                            ),
+                            tool_call_id: msg
+                                .tool_call_id
+                                .clone()
+                                .unwrap_or_else(|| "test".to_string()),
+                        };
+                        ChatCompletionRequestMessage::Tool(tool_message)
+                    }
                 }
-                crate::ai::MessageRole::Tool => {
-                    let tool_message = ChatCompletionRequestToolMessage {
-                        content: ChatCompletionRequestToolMessageContent::Text(msg.content.clone()),
-                        tool_call_id: msg.tool_call_id.clone().unwrap_or_else(|| "test".to_string()),
-                    };
-                    ChatCompletionRequestMessage::Tool(tool_message)
-                }
-            }
-        }).collect()
+            })
+            .collect()
     }
 
     fn convert_tools(tools: &[ToolDefinition]) -> Vec<ChatCompletionTools> {
-        tools.iter().map(|tool| {
-            ChatCompletionTools::Function(ChatCompletionTool {
-                function: FunctionObject {
-                    name: tool.name.clone(),
-                    description: Some(tool.description.clone()),
-                    parameters: Some(tool.parameters.clone()),
-                    strict: None,
-                },
+        tools
+            .iter()
+            .map(|tool| {
+                ChatCompletionTools::Function(ChatCompletionTool {
+                    function: FunctionObject {
+                        name: tool.name.clone(),
+                        description: Some(tool.description.clone()),
+                        parameters: Some(tool.parameters.clone()),
+                        strict: None,
+                    },
+                })
             })
-        }).collect()
+            .collect()
     }
 }
 
@@ -121,8 +139,8 @@ impl AiProvider for OpenAiProvider {
         messages: &[Message],
         tools: &[ToolDefinition],
     ) -> Result<AiResponse> {
-        use async_openai::types::chat::CreateChatCompletionRequest;
         use async_openai::types::chat::ChatCompletionToolChoiceOption::Mode;
+        use async_openai::types::chat::CreateChatCompletionRequest;
         use async_openai::types::chat::ToolChoiceOptions;
 
         let request = CreateChatCompletionRequest {
@@ -133,7 +151,8 @@ impl AiProvider for OpenAiProvider {
             ..Default::default()
         };
 
-        let response = self.client
+        let response = self
+            .client
             .chat()
             .create(request)
             .await
@@ -155,16 +174,16 @@ impl AiProvider for OpenAiProvider {
                 ChatCompletionMessageToolCalls::Function(tc) => Some(tc),
                 _ => None, // ignore custom tool calls for now
             })
-            .map(|tc| {
-                ToolCall {
-                    id: tc.id,
-                    name: tc.function.name,
-                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(json!({})),
-                }
+            .map(|tc| ToolCall {
+                id: tc.id,
+                name: tc.function.name,
+                arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(json!({})),
             })
             .collect();
 
-        Ok(AiResponse { content, tool_calls })
+        Ok(AiResponse {
+            content,
+            tool_calls,
+        })
     }
 }
-

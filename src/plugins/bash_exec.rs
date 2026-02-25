@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use serde_json::json;
+use crate::plugin::{Plugin, Tool};
+use crate::types::{ToolContext, ToolParameters, ToolResult};
 use async_trait::async_trait;
+use serde_json::json;
+use std::sync::Arc;
 use tokio::process::Command;
-use crate::plugin::{Tool, Plugin};
-use crate::types::{ToolContext, ToolResult, ToolParameters};
 
 pub struct BashExecPlugin;
 
@@ -17,9 +17,7 @@ impl Plugin for BashExecPlugin {
     }
 
     fn tools(&self) -> Vec<Arc<dyn Tool>> {
-        vec![
-            Arc::new(BashExecTool),
-        ]
+        vec![Arc::new(BashExecTool)]
     }
 }
 
@@ -112,7 +110,10 @@ mod tests {
 
         let result = tool.execute(&ctx, json!({})).await;
         assert!(!result.is_success());
-        assert!(result.error_message().unwrap().contains("Missing 'command' parameter"));
+        assert!(result
+            .error_message()
+            .unwrap()
+            .contains("Missing 'command' parameter"));
     }
 
     #[tokio::test]
@@ -137,7 +138,9 @@ mod tests {
         };
 
         // Command that writes to stderr but exits with success
-        let result = tool.execute(&ctx, json!({"command": "echo error >&2; echo stdout"})).await;
+        let result = tool
+            .execute(&ctx, json!({"command": "echo error >&2; echo stdout"}))
+            .await;
         assert!(result.is_success());
         assert_eq!(result.output().trim(), "stdout");
     }
@@ -150,7 +153,9 @@ mod tests {
             permissions: vec![],
         };
 
-        let result = tool.execute(&ctx, json!({"command": "echo -e 'line1\nline2'"})).await;
+        let result = tool
+            .execute(&ctx, json!({"command": "echo -e 'line1\nline2'"}))
+            .await;
         assert!(result.is_success());
         assert_eq!(result.output().trim(), "line1\nline2");
     }

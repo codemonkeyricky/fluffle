@@ -1,12 +1,12 @@
+use super::shared_messages::SharedMessages;
 use crate::agent::Agent;
 use crate::config::Config;
 use crate::error::Result;
+use futures::poll;
 use std::sync::Arc;
-use super::shared_messages::SharedMessages;
+use std::task::Poll;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use futures::poll;
-use std::task::Poll;
 
 pub struct App {
     pub agent: Arc<RwLock<Agent>>,
@@ -24,7 +24,6 @@ pub struct StatusInfo {
     pub provider: String,
     pub plugins_loaded: usize,
 }
-
 
 impl App {
     pub async fn new() -> Result<Self> {
@@ -144,7 +143,6 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-
 
     #[tokio::test]
     async fn test_app_new_with_shared_messages() {

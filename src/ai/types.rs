@@ -3,9 +3,9 @@
 //! This module defines the data structures used to communicate with AI providers,
 //! including messages, tool definitions, and responses.
 
+use crate::types::ToolParameters;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::types::ToolParameters;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

@@ -1,5 +1,5 @@
-use nanocode::config::Config;
 use nanocode::agent::Agent;
+use nanocode::config::Config;
 use nanocode::ui::SharedMessages;
 use std::sync::Arc;
 

@@ -1,24 +1,24 @@
-use crossterm::event::{KeyEvent};
+use crossterm::event::KeyEvent;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::interval;
-use std::time::Duration;
 
 #[derive(Debug)]
 pub enum Event {
     Key(KeyEvent),
     Tick,
-    TaskCompleted,  // New: Background task finished
+    TaskCompleted, // New: Background task finished
 }
 
 pub struct EventHandler {
     rx: mpsc::Receiver<Event>,
-    tx: mpsc::Sender<Event>,  // Keep sender for task completion signals
-    _task_handle: tokio::task::JoinHandle<()>,  // Background task handle for cleanup
+    tx: mpsc::Sender<Event>, // Keep sender for task completion signals
+    _task_handle: tokio::task::JoinHandle<()>, // Background task handle for cleanup
 }
 
 impl EventHandler {
     pub fn new(tick_rate: u64) -> Self {
-        let (tx, rx) = mpsc::channel(100);  // Reasonable buffer size
+        let (tx, rx) = mpsc::channel(100); // Reasonable buffer size
         let tick_rate = Duration::from_millis(tick_rate);
 
         // Clone the sender for use in the background task
@@ -98,7 +98,11 @@ impl EventHandler {
             }
         });
 
-        Self { rx, tx, _task_handle: task_handle }
+        Self {
+            rx,
+            tx,
+            _task_handle: task_handle,
+        }
     }
 
     pub async fn next(&mut self) -> Option<Event> {

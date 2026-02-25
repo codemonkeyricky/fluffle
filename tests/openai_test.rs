@@ -1,4 +1,4 @@
-use nanocode::ai::{AiProvider, Message, ToolDefinition, OpenAiProvider};
+use nanocode::ai::{AiProvider, Message, OpenAiProvider, ToolDefinition};
 use serde_json::json;
 
 #[tokio::test]

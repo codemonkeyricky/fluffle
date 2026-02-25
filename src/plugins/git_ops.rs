@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use serde_json::json;
+use crate::plugin::{Plugin, Tool};
+use crate::types::{ToolContext, ToolParameters, ToolResult};
 use async_trait::async_trait;
+use serde_json::json;
+use std::sync::Arc;
 use tokio::process::Command;
-use crate::plugin::{Tool, Plugin};
-use crate::types::{ToolContext, ToolResult, ToolParameters};
 
 pub struct GitOpsPlugin;
 
@@ -17,10 +17,7 @@ impl Plugin for GitOpsPlugin {
     }
 
     fn tools(&self) -> Vec<Arc<dyn Tool>> {
-        vec![
-            Arc::new(GitStatusTool),
-            Arc::new(GitDiffTool),
-        ]
+        vec![Arc::new(GitStatusTool), Arc::new(GitDiffTool)]
     }
 }
 

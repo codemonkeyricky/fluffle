@@ -7,9 +7,9 @@
 //!
 //! Plugins are registered at compile time using the `inventory` crate.
 
-use std::sync::Arc;
+use crate::types::{ToolContext, ToolParameters, ToolResult};
 use async_trait::async_trait;
-use crate::types::{ToolContext, ToolResult, ToolParameters};
+use std::sync::Arc;
 
 /// A tool that can be executed by the AI agent.
 ///
@@ -67,9 +67,15 @@ mod tests {
 
         #[async_trait]
         impl Tool for TestTool {
-            fn name(&self) -> &'static str { "test" }
-            fn description(&self) -> &'static str { "test tool" }
-            fn parameters(&self) -> ToolParameters { json!({}) }
+            fn name(&self) -> &'static str {
+                "test"
+            }
+            fn description(&self) -> &'static str {
+                "test tool"
+            }
+            fn parameters(&self) -> ToolParameters {
+                json!({})
+            }
             async fn execute(&self, _ctx: &ToolContext, _params: ToolParameters) -> ToolResult {
                 ToolResult::success("test")
             }

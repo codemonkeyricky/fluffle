@@ -1,9 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use nanocode::ui::{App, EventHandler};
-    use nanocode::config::Config;
-    use std::sync::Arc;
-    use tokio::sync::RwLock;
 
     #[tokio::test]
     async fn test_async_input_does_not_block_ui() {

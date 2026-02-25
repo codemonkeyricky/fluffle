@@ -4,13 +4,13 @@
 //! (OpenAI, Anthropic) through the `AiProvider` trait. Providers can be
 //! created at runtime based on configuration.
 
-mod types;
-mod openai;
 mod anthropic;
+mod openai;
+mod types;
 
-pub use types::*;
-pub use openai::OpenAiProvider;
 pub use anthropic::AnthropicProvider;
+pub use openai::OpenAiProvider;
+pub use types::*;
 
 use crate::error::Result;
 use async_trait::async_trait;
@@ -30,7 +30,10 @@ pub fn create_provider(provider_type: &str, api_key: Option<&str>) -> Result<Box
     match normalized.as_str() {
         "openai" => Ok(Box::new(OpenAiProvider::new(api_key)?)),
         "anthropic" => Ok(Box::new(AnthropicProvider::new(api_key)?)),
-        _ => Err(crate::error::Error::Ai(format!("Unsupported provider: {}", provider_type))),
+        _ => Err(crate::error::Error::Ai(format!(
+            "Unsupported provider: {}",
+            provider_type
+        ))),
     }
 }
 

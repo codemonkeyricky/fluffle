@@ -1,12 +1,12 @@
-use nanocode::ui::{App, Event, EventHandler};
-use nanocode::error::Result;
-use nanocode::headless;
-use ratatui::{backend::CrosstermBackend, Terminal};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use nanocode::error::Result;
+use nanocode::headless;
+use nanocode::ui::{App, Event, EventHandler};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use structopt::StructOpt;
 
@@ -84,7 +84,9 @@ impl TerminalGuard {
             }
         };
 
-        Ok(Self { terminal: Some(terminal) })
+        Ok(Self {
+            terminal: Some(terminal),
+        })
     }
 
     fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<io::Stdout>> {
@@ -103,11 +105,7 @@ impl Drop for TerminalGuard {
             );
             let _ = terminal.show_cursor();
         } else {
-            let _ = execute!(
-                io::stdout(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            );
+            let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
         }
     }
 }
@@ -123,7 +121,6 @@ async fn main() -> Result<()> {
         let mut guard = TerminalGuard::setup()?;
         let mut app = App::new().await?;
         let mut event_handler = EventHandler::new(250);
-
 
         let result = async {
             loop {
@@ -156,8 +153,7 @@ async fn main() -> Result<()> {
                             continue;
                         }
                     }
-                    Some(Event::TaskCompleted) => {
-                    }
+                    Some(Event::TaskCompleted) => {}
                     None => {
                         break;
                     }
@@ -168,7 +164,8 @@ async fn main() -> Result<()> {
                 }
             }
             Ok(())
-        }.await;
+        }
+        .await;
 
         drop(guard);
         result

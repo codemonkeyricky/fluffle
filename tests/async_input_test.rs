@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
+    use nanocode::ui::{Event, EventHandler};
     use nanocode::App;
-    use nanocode::ui::{EventHandler, Event};
     use tokio::time::{timeout, Duration};
 
     #[tokio::test]
@@ -54,7 +54,10 @@ mod tests {
         let handler = EventHandler::new(100);
 
         // Send task completed event
-        handler.send_task_completed().await.expect("Failed to send task completed");
+        handler
+            .send_task_completed()
+            .await
+            .expect("Failed to send task completed");
 
         // We can't easily verify this without a receiver, but at least verify no panic
         // The event is sent to the background task's channel
@@ -89,11 +92,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_handle_input_spawns_task() {
-        use nanocode::ui::App;
-        use std::sync::Arc;
-        use tokio::sync::RwLock;
         use nanocode::agent::Agent;
         use nanocode::config::Config;
+
+        use std::sync::Arc;
+        use tokio::sync::RwLock;
 
         // Create minimal config with valid provider
         let config = Config {
@@ -106,7 +109,7 @@ mod tests {
         };
 
         let agent = Agent::new(config).expect("Agent creation failed");
-        let agent_wrapped = Arc::new(RwLock::new(agent));
+        let _agent_wrapped = Arc::new(RwLock::new(agent));
 
         // Can't easily test full App::new() due to config loading
         // Test that the method signature and structure are correct

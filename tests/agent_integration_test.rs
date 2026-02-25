@@ -18,11 +18,17 @@ async fn test_agent_creation_and_structure() {
 
     // Verify agent has tools (discovered from plugins)
     let tools = agent.tools();
-    assert!(!tools.is_empty(), "Agent should discover tools from plugins");
+    assert!(
+        !tools.is_empty(),
+        "Agent should discover tools from plugins"
+    );
 
     // Verify conversation history is empty initially
-    let history = agent.conversation_history();
-    assert!(history.is_empty(), "Conversation history should be empty initially");
+    let history = agent.history();
+    assert!(
+        history.is_empty(),
+        "Conversation history should be empty initially"
+    );
 
     // Verify config is stored
     let stored_config = agent.config();
@@ -50,17 +56,21 @@ async fn test_agent_process_method_exists() {
     let result = agent.process("Hello, agent!").await;
 
     // The method should return an error (no API key), not panic
-    assert!(result.is_err(), "process() should return error without API key");
+    assert!(
+        result.is_err(),
+        "process() should return error without API key"
+    );
 
     // Check error type
     let err = result.unwrap_err();
     let err_str = err.to_string();
     assert!(
-        err_str.contains("API") ||
-        err_str.contains("iteration") ||
-        err_str.contains("OpenAI") ||
-        err_str.contains("AI error"),
-        "Error should be related to API or iteration: {}", err_str
+        err_str.contains("API")
+            || err_str.contains("iteration")
+            || err_str.contains("OpenAI")
+            || err_str.contains("AI error"),
+        "Error should be related to API or iteration: {}",
+        err_str
     );
 }
 
@@ -90,7 +100,10 @@ async fn test_agent_tools_access() {
         assert!(!name.is_empty(), "Tool should have a name");
         assert!(!description.is_empty(), "Tool should have a description");
         // Parameters should be valid JSON (even if empty object)
-        assert!(parameters.is_object() || parameters.is_null(), "Tool parameters should be JSON object or null");
+        assert!(
+            parameters.is_object() || parameters.is_null(),
+            "Tool parameters should be JSON object or null"
+        );
     }
 }
 #[tokio::test]
@@ -107,15 +120,19 @@ async fn test_agent_conversation_history_management() {
     let mut agent = Agent::new(config).expect("Agent initialization failed");
 
     // Initial history should be empty
-    assert!(agent.conversation_history().is_empty());
+    assert!(agent.history().is_empty());
 
     // Try to process a message (will fail due to no API key)
     let result = agent.process("Test message").await;
     assert!(result.is_err());
 
     // Even though process failed, user message should be added to history
-    let history = agent.conversation_history();
-    assert_eq!(history.len(), 1, "User message should be added to history even if process fails");
+    let history = agent.history();
+    assert_eq!(
+        history.len(),
+        1,
+        "User message should be added to history even if process fails"
+    );
 
     // Verify the message is a user message
     match history[0].role {
@@ -140,12 +157,14 @@ async fn test_agent_tool_conversion() {
 
     // This is an internal method, but we can test it indirectly through process()
     // or we could make it public for testing. For now, just verify agent creation.
-    assert!(true, "Agent should be created successfully with tool conversion capability");
+    assert!(
+        true,
+        "Agent should be created successfully with tool conversion capability"
+    );
 }
 
 #[tokio::test]
 async fn test_agent_process_handles_iterative_tool_calls() {
-
     // Create a mock agent or test with actual provider
     // This test will initially fail because process() doesn't loop
     let config = Config {

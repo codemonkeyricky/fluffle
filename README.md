@@ -7,7 +7,7 @@ A Claude-Code-like code agent with plugin architecture, built in Rust.
 - **Plugin architecture:** Extensible tool system with compile-time registration
 - **Multiple AI providers:** Supports OpenAI and Anthropic via abstraction layer
 - **TUI interface:** Terminal user interface with Ratatui (four-pane layout)
-- **Built-in tools:** File operations, bash execution, git operations
+- **Built-in tools:** File operations, bash execution, git operations, subagent creation, codebase exploration
 - **Configuration:** Layered config system with `.env` support
 
 ## Installation
@@ -48,8 +48,25 @@ cargo run
 In the TUI:
 - Type commands like "Read Cargo.toml" or "Run ls -la"
 - Press Enter to execute
-- Tool outputs appear in the Tool Output pane
-- Press Ctrl+C to exit
+- See results in output pane
+
+## Subagent System
+
+The agent supports creating subagents for specialized tasks. Two new tools are available:
+
+### Task Tool
+Create a subagent with a custom system prompt:
+```
+task(description="Find all TODO comments in the codebase", system_prompt="You are a code reviewer specialized in identifying technical debt.")
+```
+
+### Explore Tool
+Specialized subagent for exploring codebases with a predefined system prompt:
+```
+explore(description="Understand the project structure and main components")
+```
+
+Subagents run synchronously with isolated conversation history and inherit the parent agent's configuration and tools. They return a summarized result to the main conversation.
 
 ## Development
 
@@ -64,7 +81,7 @@ src/
 ├── plugin.rs     # Plugin/trait definitions
 ├── types.rs      # Common types
 ├── ui/           # TUI components (app, components, event)
-└── plugins/      # Built-in plugins (file_ops, bash_exec, git_ops)
+└── plugins/      # Built-in plugins (file_ops, bash_exec, git_ops, task, explore)
 ```
 
 ### Adding a New Plugin

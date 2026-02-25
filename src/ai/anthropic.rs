@@ -2,8 +2,8 @@
 //!
 //! This module provides an `AiProvider` implementation using the Anthropic API.
 
+use crate::ai::{AiProvider, AiResponse, Message, ToolCall, ToolDefinition};
 use crate::error::{Error, Result};
-use crate::ai::{AiProvider, Message, ToolDefinition, AiResponse, ToolCall};
 use anthropic_sdk::{Client, ToolChoice};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -53,7 +53,10 @@ impl AnthropicProvider {
                         }
                     }
                     // Determine content field: if only one text block and no tool calls, can be string.
-                    let content = if content_blocks.len() == 1 && content_blocks[0].get("type").and_then(|t| t.as_str()) == Some("text") && msg.tool_calls.is_none() {
+                    let content = if content_blocks.len() == 1
+                        && content_blocks[0].get("type").and_then(|t| t.as_str()) == Some("text")
+                        && msg.tool_calls.is_none()
+                    {
                         json!(msg.content)
                     } else {
                         json!(content_blocks)
@@ -107,7 +110,8 @@ impl AnthropicProvider {
         // Check if it's an error response
         if let Some(error_type) = v.get("type").and_then(|t| t.as_str()) {
             if error_type == "error" {
-                let message = v.get("error")
+                let message = v
+                    .get("error")
                     .and_then(|e| e.get("message"))
                     .and_then(|m| m.as_str())
                     .unwrap_or("Unknown error");
@@ -115,7 +119,8 @@ impl AnthropicProvider {
             }
         }
 
-        let content = v.get("content")
+        let content = v
+            .get("content")
             .and_then(|c| c.as_array())
             .ok_or_else(|| Error::Ai("Missing content array in response".to_string()))?;
 
@@ -123,7 +128,8 @@ impl AnthropicProvider {
         let mut tool_calls = Vec::new();
 
         for block in content {
-            let block_type = block.get("type")
+            let block_type = block
+                .get("type")
                 .and_then(|t| t.as_str())
                 .ok_or_else(|| Error::Ai("Missing type in content block".to_string()))?;
             match block_type {
@@ -133,25 +139,32 @@ impl AnthropicProvider {
                     }
                 }
                 "tool_use" => {
-                    let id = block.get("id")
+                    let id = block
+                        .get("id")
                         .and_then(|id| id.as_str())
                         .ok_or_else(|| Error::Ai("Missing id in tool_use block".to_string()))?
                         .to_string();
-                    let name = block.get("name")
+                    let name = block
+                        .get("name")
                         .and_then(|n| n.as_str())
                         .ok_or_else(|| Error::Ai("Missing name in tool_use block".to_string()))?
                         .to_string();
-                    let input = block.get("input")
-                        .cloned()
-                        .unwrap_or_else(|| json!({}));
-                    tool_calls.push(ToolCall { id, name, arguments: input });
+                    let input = block.get("input").cloned().unwrap_or_else(|| json!({}));
+                    tool_calls.push(ToolCall {
+                        id,
+                        name,
+                        arguments: input,
+                    });
                 }
                 _ => {}
             }
         }
 
         let combined_text = text_parts.join("");
-        Ok(AiResponse { content: combined_text, tool_calls })
+        Ok(AiResponse {
+            content: combined_text,
+            tool_calls,
+        })
     }
 }
 
@@ -193,7 +206,10 @@ impl AiProvider for AnthropicProvider {
             .map_err(|e| Error::Ai(format!("Failed to read Anthropic response: {}", e)))?;
 
         if !status.is_success() {
-            return Err(Error::Ai(format!("Anthropic API error ({}): {}", status, response_text)));
+            return Err(Error::Ai(format!(
+                "Anthropic API error ({}): {}",
+                status, response_text
+            )));
         }
 
         Self::parse_response(&response_text)

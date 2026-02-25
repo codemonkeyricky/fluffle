@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use config::{Config as ConfigBuilder, File, Environment};
+use config::{Config as ConfigBuilder, Environment, File};
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -15,7 +15,7 @@ pub struct Config {
     pub max_tokens: u32,
     pub temperature: f32,
     #[serde(default = "default_max_tool_iterations")]
-    pub max_tool_iterations: u32,  // default: 10
+    pub max_tool_iterations: u32, // default: 10
 }
 
 impl Config {
@@ -32,7 +32,8 @@ impl Config {
             .build()
             .map_err(|e| Error::ConfigLoad(e.to_string()))?;
 
-        builder.try_deserialize()
+        builder
+            .try_deserialize()
             .map_err(|e| Error::ConfigLoad(e.to_string()))
     }
 
@@ -40,8 +41,7 @@ impl Config {
         let mut path = dirs::config_dir()
             .ok_or_else(|| Error::ConfigLoad("Could not find config directory".to_string()))?;
         path.push("nanocode");
-        std::fs::create_dir_all(&path)
-            .map_err(|e| Error::ConfigLoad(e.to_string()))?;
+        std::fs::create_dir_all(&path).map_err(|e| Error::ConfigLoad(e.to_string()))?;
         Ok(path)
     }
 }

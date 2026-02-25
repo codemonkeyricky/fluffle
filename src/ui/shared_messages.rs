@@ -67,6 +67,9 @@ mod tests {
         shared.push("Message 2".to_string());
 
         let messages = shared.take_messages();
-        assert_eq!(messages, vec!["Message 1".to_string(), "Message 2".to_string()]);
+        assert_eq!(
+            messages,
+            vec!["Message 1".to_string(), "Message 2".to_string()]
+        );
     }
 }

@@ -1,3 +1,4 @@
+use crate::ui::App;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
@@ -5,7 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
-use crate::ui::App;
 
 pub fn render(frame: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -26,10 +26,7 @@ fn render_chat_history(frame: &mut Frame, area: Rect, app: &App) {
     let messages = app.shared_messages.take_messages();
     let message_count = messages.len();
 
-    let lines: Vec<Line> = messages
-        .iter()
-        .map(|msg| Line::from(msg.clone()))
-        .collect();
+    let lines: Vec<Line> = messages.iter().map(|msg| Line::from(msg.clone())).collect();
 
     let history = Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL).title("Chat"))
@@ -38,7 +35,6 @@ fn render_chat_history(frame: &mut Frame, area: Rect, app: &App) {
 
     frame.render_widget(history, area);
 }
-
 
 fn render_input(frame: &mut Frame, area: Rect, app: &App) {
     let input = Paragraph::new(app.input.as_str())

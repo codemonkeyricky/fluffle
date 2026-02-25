@@ -1,10 +1,10 @@
+use crate::plugin::{Plugin, Tool};
+use crate::types::{ToolContext, ToolParameters, ToolResult};
+use async_trait::async_trait;
+use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use serde_json::json;
-use async_trait::async_trait;
 use tokio::fs;
-use crate::plugin::{Tool, Plugin};
-use crate::types::{ToolContext, ToolResult, ToolParameters};
 
 /// Securely join a relative path to a base directory, preventing directory traversal attacks.
 /// Returns an error if the resulting path would be outside the base directory.
@@ -208,11 +208,21 @@ impl Tool for FileListTool {
                                     let entry_type = if is_dir { "dir" } else { "file" };
                                     files.push(format!("{} [{}]", name, entry_type));
                                 }
-                                Err(e) => return ToolResult::error(format!("Failed to read metadata: {}", e)),
+                                Err(e) => {
+                                    return ToolResult::error(format!(
+                                        "Failed to read metadata: {}",
+                                        e
+                                    ))
+                                }
                             }
                         }
                         Ok(None) => break, // No more entries
-                        Err(e) => return ToolResult::error(format!("Failed to read directory entry: {}", e)),
+                        Err(e) => {
+                            return ToolResult::error(format!(
+                                "Failed to read directory entry: {}",
+                                e
+                            ))
+                        }
                     }
                 }
                 files.sort();
@@ -271,10 +281,15 @@ mod tests {
         };
 
         // Test writing a file
-        let result = tool.execute(&ctx, json!({
-            "path": "test.txt",
-            "content": "Hello, world!"
-        })).await;
+        let result = tool
+            .execute(
+                &ctx,
+                json!({
+                    "path": "test.txt",
+                    "content": "Hello, world!"
+                }),
+            )
+            .await;
         assert!(result.is_success());
         assert!(result.output().contains("Successfully wrote to"));
 
@@ -313,9 +328,18 @@ mod tests {
         let base = PathBuf::from("/base");
 
         // Valid relative paths
-        assert_eq!(secure_join(&base, "file.txt").unwrap(), PathBuf::from("/base/file.txt"));
-        assert_eq!(secure_join(&base, "subdir/file.txt").unwrap(), PathBuf::from("/base/subdir/file.txt"));
-        assert_eq!(secure_join(&base, "subdir/../file.txt").unwrap(), PathBuf::from("/base/file.txt"));
+        assert_eq!(
+            secure_join(&base, "file.txt").unwrap(),
+            PathBuf::from("/base/file.txt")
+        );
+        assert_eq!(
+            secure_join(&base, "subdir/file.txt").unwrap(),
+            PathBuf::from("/base/subdir/file.txt")
+        );
+        assert_eq!(
+            secure_join(&base, "subdir/../file.txt").unwrap(),
+            PathBuf::from("/base/file.txt")
+        );
         assert_eq!(secure_join(&base, ".").unwrap(), base);
         assert_eq!(secure_join(&base, "").unwrap(), base);
     }
@@ -346,7 +370,10 @@ mod tests {
 
         let result = tool.execute(&ctx, json!({"path": "nonexistent.txt"})).await;
         assert!(!result.is_success());
-        assert!(result.error_message().unwrap().contains("Failed to read file"));
+        assert!(result
+            .error_message()
+            .unwrap()
+            .contains("Failed to read file"));
     }
 
     #[tokio::test]
@@ -361,12 +388,18 @@ mod tests {
         // Missing path
         let result = tool.execute(&ctx, json!({"content": "test"})).await;
         assert!(!result.is_success());
-        assert!(result.error_message().unwrap().contains("Missing 'path' parameter"));
+        assert!(result
+            .error_message()
+            .unwrap()
+            .contains("Missing 'path' parameter"));
 
         // Missing content
         let result = tool.execute(&ctx, json!({"path": "test.txt"})).await;
         assert!(!result.is_success());
-        assert!(result.error_message().unwrap().contains("Missing 'content' parameter"));
+        assert!(result
+            .error_message()
+            .unwrap()
+            .contains("Missing 'content' parameter"));
     }
 
     #[tokio::test]

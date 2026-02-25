@@ -31,11 +31,9 @@ fn read_input() -> Result<String> {
     match lines.next() {
         Some(Ok(line)) => Ok(line),
         Some(Err(e)) => Err(crate::error::Error::Io(e)),
-        None => Err(crate::error::Error::Io(
-            io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "No input provided"
-            )
-        )),
+        None => Err(crate::error::Error::Io(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "No input provided",
+        ))),
     }
 }
