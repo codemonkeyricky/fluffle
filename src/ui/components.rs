@@ -23,7 +23,7 @@ pub fn render(frame: &mut Frame, app: &App) {
 }
 
 fn render_chat_history(frame: &mut Frame, area: Rect, app: &App) {
-    let messages = app.shared_messages.take_messages();
+    let messages = app.messages.clone();
     let message_count = messages.len();
 
     let lines: Vec<Line> = messages.iter().map(|msg| Line::from(msg.clone())).collect();

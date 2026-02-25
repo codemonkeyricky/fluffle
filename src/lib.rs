@@ -17,10 +17,12 @@
 //! For more details, see the individual modules.
 
 pub mod agent;
+pub mod agent_thread;
 pub mod ai;
 pub mod config;
 pub mod error;
 pub mod headless;
+pub mod messaging;
 pub mod plugin;
 pub mod plugins;
 pub mod types;
@@ -31,9 +33,11 @@ mod test_utils;
 
 // Re-export commonly used types
 pub use agent::Agent;
+pub use agent_thread::{spawn, spawn_with_agent};
 pub use ai::{create_provider, AiProvider, AiResponse, Message, ToolCall, ToolDefinition};
 pub use config::Config;
 pub use error::{Error, Result};
+pub use messaging::{AgentToUi, UiToAgent};
 pub use plugin::{Plugin, Tool};
 pub use types::{ToolContext, ToolParameters, ToolResult};
 pub use ui::{App, Event, EventHandler};

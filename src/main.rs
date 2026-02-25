@@ -6,9 +6,12 @@ use crossterm::{
 use nanocode::error::Result;
 use nanocode::headless;
 use nanocode::ui::{App, Event, EventHandler};
+use nanocode::agent_thread::spawn;
+use nanocode::messaging::UiToAgent;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use structopt::StructOpt;
+use tokio::sync::mpsc;
 
 #[derive(StructOpt)]
 #[structopt(name = "nanocode")]
@@ -119,7 +122,19 @@ async fn main() -> Result<()> {
         headless::run(config, args.prompt).await
     } else {
         let mut guard = TerminalGuard::setup()?;
-        let mut app = App::new().await?;
+        
+        // Load config
+        let config = nanocode::config::Config::load().await?;
+        
+        // Create channel for agent->UI updates
+        let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
+        
+        // Spawn agent thread (returns sender for UI->agent requests)
+        let ui_to_agent_tx = spawn(config.clone(), agent_to_ui_tx);
+        let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
+        
+        // Create UI app with channels
+        let mut app = App::new(config, ui_to_agent_tx, agent_to_ui_rx).await?;
         let mut event_handler = EventHandler::new(250);
 
         let result = async {
@@ -145,11 +160,9 @@ async fn main() -> Result<()> {
                         _ => {}
                     },
                     Some(Event::Tick) => {
-                        if app.check_task_completion().await {
-                            continue;
-                        }
-
-                        if app.shared_messages.is_dirty() {
+                        // Poll for messages from agent thread
+                        if app.poll_agent_messages().await {
+                            // Force redraw if messages received
                             continue;
                         }
                     }
@@ -167,6 +180,8 @@ async fn main() -> Result<()> {
         }
         .await;
 
+        // Send shutdown signal to agent thread
+        let _ = ui_to_agent_tx_clone.send(UiToAgent::Shutdown).await;
         drop(guard);
         result
     }

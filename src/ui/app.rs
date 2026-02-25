@@ -1,23 +1,19 @@
-use super::shared_messages::SharedMessages;
 use crate::agent::Agent;
 use crate::ai::TokenUsage;
 use crate::config::Config;
 use crate::error::Result;
-use futures::poll;
-use std::sync::Arc;
-use std::task::Poll;
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
+use crate::messaging::{AgentToUi, UiToAgent};
+use tokio::sync::mpsc;
 
 pub struct App {
-    pub agent: Arc<RwLock<Agent>>,
-    pub shared_messages: Arc<SharedMessages>,
+    pub ui_to_agent_tx: mpsc::Sender<UiToAgent>,
+    pub agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
+    pub messages: Vec<String>,
     pub input: String,
     pub should_quit: bool,
     pub status: StatusInfo,
-    pub processing_task: Option<JoinHandle<Result<String>>>,
-    // TODO: Consider storing errors as well (Option<Result<String>> or separate error field)
-    pub pending_result: Option<String>,
+    pub waiting_for_response: bool,
+    pub token_usage: TokenUsage,
 }
 
 pub struct StatusInfo {
@@ -27,15 +23,13 @@ pub struct StatusInfo {
 }
 
 impl App {
-    pub async fn new() -> Result<Self> {
-        let config = Config::load().await?;
-        let mut agent = Agent::new(config.clone())?;
-
-        let shared_messages = Arc::new(SharedMessages::new());
-
-        // Set shared messages on agent
-        agent.set_shared_messages(shared_messages.clone());
-
+    pub async fn new(
+        config: Config,
+        ui_to_agent_tx: mpsc::Sender<UiToAgent>,
+        agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
+    ) -> Result<Self> {
+        // Create temporary agent to get tool count for status
+        let agent = Agent::new(config.clone())?;
         let status = StatusInfo {
             model: config.model,
             provider: config.provider,
@@ -43,106 +37,90 @@ impl App {
         };
 
         Ok(Self {
-            agent: Arc::new(RwLock::new(agent)),
-            shared_messages,
+            ui_to_agent_tx,
+            agent_to_ui_rx,
+            messages: Vec::new(),
             input: String::new(),
             should_quit: false,
             status,
-            processing_task: None,
-            pending_result: None,
+            waiting_for_response: false,
+            token_usage: TokenUsage::default(),
         })
     }
 
-    /// Handles the current input asynchronously by spawning a background task.
+    /// Handles the current input asynchronously by sending request to agent thread.
     /// Returns immediately, allowing the UI to remain responsive during processing.
-    /// Use `is_processing()` to check if a task is running.
+    /// Use `is_processing()` to check if waiting for response.
     pub async fn handle_input(&mut self) -> Result<()> {
         if self.input.trim().is_empty() {
             return Ok(());
         }
 
-        // Don't start new task if one is already running
-        if self.processing_task.is_some() {
+        // Don't send new request if waiting for response
+        if self.waiting_for_response {
             return Ok(());
         }
 
         // Add user message to display
-        self.shared_messages.push(format!("> {}", self.input));
+        self.messages.push(format!("> {}", self.input));
 
-        // Clone references for background task
-        let agent_clone = self.agent.clone();
-        let shared_messages_clone = self.shared_messages.clone();
-        let input = std::mem::take(&mut self.input);
+        // Send request to agent thread
+        let request = UiToAgent::Request(std::mem::take(&mut self.input));
+        if let Err(e) = self.ui_to_agent_tx.send(request).await {
+            self.messages.push(format!("Error sending request: {}", e));
+            return Ok(());
+        }
 
-        // Spawn background processing task
-        self.processing_task = Some(tokio::task::spawn_local(async move {
-            let mut agent = agent_clone.write().await;
-            let result = agent.process(&input).await;
-
-            match result {
-                Ok(response) => {
-                    // Add final response to shared messages
-                    shared_messages_clone.push(response.clone());
-                    Ok(response)
-                }
-                Err(e) => {
-                    // Add error to shared messages
-                    shared_messages_clone.push(format!("Error: {}", e));
-                    Err(e)
-                }
-            }
-        }));
-
+        self.waiting_for_response = true;
         Ok(())
     }
 
-    /// Returns true if a background processing task is currently running.
+    /// Returns true if waiting for a response from agent thread.
     pub fn is_processing(&self) -> bool {
-        self.processing_task.is_some()
+        self.waiting_for_response
     }
 
     /// Returns the current token usage for the agent session.
     pub fn token_usage(&self) -> TokenUsage {
-        match self.agent.try_read() {
-            Ok(guard) => guard.token_usage().clone(),
-            Err(_) => TokenUsage::default(),
-        }
+        self.token_usage.clone()
     }
 
     /// Checks if the current background processing task has completed.
     /// Returns true if a task was completed (successfully or with error).
     /// If the task completed successfully, the result is stored in `pending_result`.
-    pub async fn check_task_completion(&mut self) -> bool {
-        if let Some(task) = &mut self.processing_task {
-            match poll!(task) {
-                Poll::Ready(result) => {
-                    match result {
-                        Ok(Ok(response)) => {
-                            self.pending_result = Some(response);
-                        }
-                        Ok(Err(e)) => {
-                            eprintln!("Task failed: {}", e);
-                        }
-                        Err(join_err) => {
-                            eprintln!("Task panicked: {}", join_err);
-                        }
-                    }
-                    self.processing_task = None;
-                    true
+    /// Polls for messages from agent thread and updates UI state.
+    /// Returns true if any messages were processed.
+    pub async fn poll_agent_messages(&mut self) -> bool {
+        let mut received = false;
+        while let Ok(msg) = self.agent_to_ui_rx.try_recv() {
+            received = true;
+            match msg {
+                AgentToUi::ToolCall(text) => {
+                    self.messages.push(text);
                 }
-                Poll::Pending => false,
+                AgentToUi::ToolResult(text) => {
+                    self.messages.push(text);
+                }
+                AgentToUi::Response(text) => {
+                    self.messages.push(text);
+                    self.waiting_for_response = false;
+                }
+                AgentToUi::Error(text) => {
+                    self.messages.push(text);
+                    self.waiting_for_response = false;
+                }
+                AgentToUi::TokenUsage(usage) => {
+                    self.token_usage = usage;
+                }
             }
-        } else {
-            false
         }
+        received
     }
 
     /// Cancels any ongoing background processing task.
-    /// Aborts the task immediately without waiting for completion.
+    /// Note: With agent thread architecture, cancellation is not currently supported.
     pub fn cancel_processing(&mut self) {
-        if let Some(task) = self.processing_task.take() {
-            task.abort();
-        }
+        // Cancellation not supported with agent thread architecture
     }
 
     pub fn quit(&mut self) {
@@ -152,24 +130,5 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-
-    #[tokio::test]
-    async fn test_app_new_with_shared_messages() {
-        // Mock config to avoid actual file loading
-        use crate::config::Config;
-
-        // Create minimal config for test
-        let _config = Config {
-            model: "test-model".to_string(),
-            api_key: None,
-            provider: "test".to_string(),
-            max_tokens: 100,
-            temperature: 0.5,
-            max_tool_iterations: 10,
-        };
-
-        // This test is conceptual - App::new loads real config
-        // We'll just verify App struct compiles with new field
-        assert!(true);
-    }
+    // Tests temporarily disabled during refactoring to agent thread architecture
 }
