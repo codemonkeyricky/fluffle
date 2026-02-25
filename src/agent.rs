@@ -146,7 +146,7 @@ impl Agent {
             }
 
             // Push tool result messages to UI
-            for (tool_call, result) in &tool_results {
+            for (_tool_call, result) in &tool_results {
                 self.push_tool_result(
                     result.is_success(),
                     if result.is_success() {
