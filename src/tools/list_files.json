@@ -1,0 +1,19 @@
+{
+  "name": "list_files",
+  "description": "List files in the current directory",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Directory path (default: current directory)",
+        "default": "."
+      }
+    },
+    "required": []
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "ls -la {{path}}"
+  }
+}

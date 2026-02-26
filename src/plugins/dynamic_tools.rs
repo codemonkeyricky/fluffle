@@ -226,28 +226,46 @@ impl DynamicTool {
     }
 }
 
-/// Load dynamic tools from config directory
+/// Load dynamic tools from built-in and user directories
 fn load_dynamic_tools() -> AnyResult<Vec<DynamicToolDef>> {
-    let tools_dir = dynamic_tools_dir()?;
-    // Create directory if it doesn't exist (no error if already exists)
-    let _ = fs::create_dir_all(&tools_dir);
+    let mut tools_map = std::collections::HashMap::new();
     
-    if !tools_dir.exists() {
-        return Ok(Vec::new());
+    // Load built-in tools first
+    if let Ok(builtin_dir) = builtin_tools_dir() {
+        if builtin_dir.exists() {
+            load_tools_from_dir(&builtin_dir, &mut tools_map)?;
+        }
     }
+    
+    // Load user tools (override built-in ones)
+    let user_dir = user_tools_dir()?;
+    // Create directory if it doesn't exist (no error if already exists)
+    let _ = fs::create_dir_all(&user_dir);
+    
+    if user_dir.exists() {
+        load_tools_from_dir(&user_dir, &mut tools_map)?;
+    }
+    
+    // Convert to vector, preserving insertion order (built-in then user)
+    let tools: Vec<DynamicToolDef> = tools_map.into_values().collect();
+    Ok(tools)
+}
 
-    let mut tools = Vec::new();
-    for entry in fs::read_dir(&tools_dir).context("Failed to read tools directory")? {
+/// Load tools from a directory into a map (name -> tool)
+fn load_tools_from_dir(dir: &Path, tools_map: &mut std::collections::HashMap<String, DynamicToolDef>) -> AnyResult<()> {
+    for entry in fs::read_dir(dir).context("Failed to read tools directory")? {
         let entry = entry.context("Failed to read directory entry")?;
         let path = entry.path();
         if path.extension().map(|ext| ext == "json").unwrap_or(false) {
             match load_tool_from_file(&path) {
-                Ok(tool) => tools.push(tool),
+                Ok(tool) => {
+                    tools_map.insert(tool.name.clone(), tool);
+                }
                 Err(e) => tracing::warn!("Failed to load tool from {}: {}", path.display(), e),
             }
         }
     }
-    Ok(tools)
+    Ok(())
 }
 
 fn load_tool_from_file(path: &Path) -> AnyResult<DynamicToolDef> {
@@ -256,12 +274,26 @@ fn load_tool_from_file(path: &Path) -> AnyResult<DynamicToolDef> {
     Ok(tool)
 }
 
-fn dynamic_tools_dir() -> AnyResult<PathBuf> {
+/// Get built-in tools directory (relative to source)
+fn builtin_tools_dir() -> AnyResult<PathBuf> {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src");
+    path.push("tools");
+    Ok(path)
+}
+
+/// Get user tools directory (~/.config/nanocode/tools)
+fn user_tools_dir() -> AnyResult<PathBuf> {
     let mut path = dirs::config_dir()
         .context("Could not find config directory")?;
     path.push("nanocode");
     path.push("tools");
     Ok(path)
+}
+
+/// Backward compatibility alias
+fn dynamic_tools_dir() -> AnyResult<PathBuf> {
+    user_tools_dir()
 }
 
 #[cfg(test)]
