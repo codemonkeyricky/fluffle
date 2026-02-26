@@ -24,24 +24,21 @@ impl HeadlessUi {
         // Create agent with system prompt
         let agent = Agent::new(config.clone())?;
         let agent = agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?;
-        
+
         // Create channel for agent->UI updates
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
-        
+
         // Spawn agent thread with existing agent
         let ui_to_agent_tx = spawn_with_agent(agent, agent_to_ui_tx);
-        
+
         let channels = crate::ui::UiChannels {
             agent_to_ui_rx,
             ui_to_agent_tx,
         };
-        
-        Ok(Self {
-            channels,
-            prompt,
-        })
+
+        Ok(Self { channels, prompt })
     }
-    
+
     /// Read input from stdin if no prompt provided.
     fn read_input() -> Result<String> {
         use std::io::{self, BufRead};
@@ -84,7 +81,7 @@ impl Ui for HeadlessUi {
         self.send_to_agent(UiToAgent::Request(input))
             .await
             .map_err(|e| crate::error::Error::Ai(format!("Failed to send request: {}", e)))?;
-        
+
         // Collect and print responses
         let mut final_response = None;
         while let Some(msg) = self.recv_from_agent().await {
@@ -112,15 +109,15 @@ impl Ui for HeadlessUi {
                 }
             }
         }
-        
+
         // Print final response if any
         if let Some(response) = final_response {
             println!("{}", response);
         }
-        
+
         // Send shutdown signal
         let _ = self.send_to_agent(UiToAgent::Shutdown).await;
-        
+
         Ok(())
     }
 }

@@ -5,7 +5,7 @@ use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::ui::bottom_pane::BottomPane;
 use crate::ui::event::{Event, EventHandler};
-use crate::ui::history_cell::{HistoryCell, PlainHistoryCell, AgentMessageCell};
+use crate::ui::history_cell::{AgentMessageCell, HistoryCell, PlainHistoryCell};
 use crate::ui::render::Renderable;
 use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
@@ -107,11 +107,17 @@ impl ChatWidget {
     /// Convert an agent message to a history cell.
     fn cell_from_agent_message(&self, msg: AgentToUi) -> Box<dyn HistoryCell> {
         match msg {
-            AgentToUi::ToolCall(text) => Box::new(PlainHistoryCell::new(format!("Tool call: {}", text))),
-            AgentToUi::ToolResult(text) => Box::new(PlainHistoryCell::new(format!("Tool result: {}", text))),
+            AgentToUi::ToolCall(text) => {
+                Box::new(PlainHistoryCell::new(format!("Tool call: {}", text)))
+            }
+            AgentToUi::ToolResult(text) => {
+                Box::new(PlainHistoryCell::new(format!("Tool result: {}", text)))
+            }
             AgentToUi::Response(text) => Box::new(AgentMessageCell::new(text)),
             AgentToUi::Error(text) => Box::new(PlainHistoryCell::new(format!("Error: {}", text))),
-            AgentToUi::TokenUsage(usage) => Box::new(PlainHistoryCell::new(format!("Token usage: {:?}", usage))),
+            AgentToUi::TokenUsage(usage) => {
+                Box::new(PlainHistoryCell::new(format!("Token usage: {:?}", usage)))
+            }
         }
     }
 }
@@ -181,25 +187,25 @@ impl AdvancedTerminalUi {
     pub async fn new(config: Config) -> Result<Self> {
         // Setup terminal
         let guard = TerminalGuard::setup()?;
-        
+
         // Create channel for agent->UI updates
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
-        
+
         // Spawn agent thread (returns sender for UI->agent requests)
         let ui_to_agent_tx = spawn(config.clone(), agent_to_ui_tx);
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
-        
+
         // Create UI widgets
         let chat_widget = ChatWidget::new();
         let bottom_pane = BottomPane::new();
-        
+
         let channels = crate::ui::UiChannels {
             agent_to_ui_rx,
             ui_to_agent_tx: ui_to_agent_tx_clone,
         };
-        
+
         let event_handler = EventHandler::new(250);
-        
+
         Ok(Self {
             guard,
             chat_widget,
@@ -211,13 +217,25 @@ impl AdvancedTerminalUi {
             token_usage: TokenUsage::default(),
         })
     }
-    
-    fn render_status_line(area: Rect, buf: &mut Buffer, model: &str, provider: &str, token_usage: &TokenUsage) {
-        use ratatui::{style::{Style, Color}, text::Line, widgets::{Paragraph, Widget}};
-        let status_text = format!("nano code | Model: {} | Provider: {} | Tokens: {}", 
-            model, provider, token_usage.total_tokens);
-        let paragraph = Paragraph::new(Line::from(status_text))
-            .style(Style::default().fg(Color::Yellow));
+
+    fn render_status_line(
+        area: Rect,
+        buf: &mut Buffer,
+        model: &str,
+        provider: &str,
+        token_usage: &TokenUsage,
+    ) {
+        use ratatui::{
+            style::{Color, Style},
+            text::Line,
+            widgets::{Paragraph, Widget},
+        };
+        let status_text = format!(
+            "nano code | Model: {} | Provider: {} | Tokens: {}",
+            model, provider, token_usage.total_tokens
+        );
+        let paragraph =
+            Paragraph::new(Line::from(status_text)).style(Style::default().fg(Color::Yellow));
         paragraph.render(area, buf);
     }
 }
@@ -240,26 +258,34 @@ impl Ui for AdvancedTerminalUi {
         loop {
             let terminal = self.guard.terminal_mut();
             let terminal_size = terminal.size()?;
-            
+
             // Compute layout
             let status_height = 1;
             let bottom_pane_height = self.bottom_pane.required_height(terminal_size.width);
             let max_bottom_height = terminal_size.height.saturating_sub(status_height);
             let bottom_pane_height = bottom_pane_height.min(max_bottom_height);
-            let available_for_viewport = terminal_size.height.saturating_sub(bottom_pane_height + status_height);
+            let available_for_viewport = terminal_size
+                .height
+                .saturating_sub(bottom_pane_height + status_height);
             let viewport_height = available_for_viewport.max(1);
-            
+
             let viewport_rect = Rect::new(0, 0, terminal_size.width, viewport_height);
-            let bottom_pane_rect = Rect::new(0, viewport_height, terminal_size.width, bottom_pane_height);
-            let status_rect = Rect::new(0, viewport_height + bottom_pane_height, terminal_size.width, status_height);
-            
+            let bottom_pane_rect =
+                Rect::new(0, viewport_height, terminal_size.width, bottom_pane_height);
+            let status_rect = Rect::new(
+                0,
+                viewport_height + bottom_pane_height,
+                terminal_size.width,
+                status_height,
+            );
+
             // Extract mutable references to widgets for use in closure
             let chat_widget = &mut self.chat_widget;
             let bottom_pane = &mut self.bottom_pane;
             let model = &self.model;
             let provider = &self.provider;
             let token_usage = &self.token_usage;
-            
+
             // Draw
             terminal.draw(|frame| {
                 // Render chat widget into viewport
@@ -267,9 +293,15 @@ impl Ui for AdvancedTerminalUi {
                 // Render bottom pane
                 bottom_pane.render(bottom_pane_rect, frame.buffer_mut());
                 // Render status line
-                Self::render_status_line(status_rect, frame.buffer_mut(), model, provider, token_usage);
+                Self::render_status_line(
+                    status_rect,
+                    frame.buffer_mut(),
+                    model,
+                    provider,
+                    token_usage,
+                );
             })?;
-            
+
             tokio::select! {
                  Some(event) = self.event_handler.next() => {
                     match event {
@@ -324,7 +356,7 @@ impl Ui for AdvancedTerminalUi {
                 else => break,
             }
         }
-        
+
         // Send shutdown signal to agent thread
         let _ = self.send_to_agent(UiToAgent::Shutdown).await;
         Ok(())

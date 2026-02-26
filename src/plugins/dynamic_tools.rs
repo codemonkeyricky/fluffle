@@ -102,9 +102,11 @@ fn render_command(
     secure_parameters: &[String],
 ) -> AnyResult<String> {
     let mut result = template.to_string();
-    let param_map = params.as_object().context("Parameters must be a JSON object")?;
+    let param_map = params
+        .as_object()
+        .context("Parameters must be a JSON object")?;
     let secure_set: HashSet<_> = secure_parameters.iter().collect();
-    
+
     for (key, value) in param_map {
         let placeholder = format!("{{{{{}}}}}", key);
         let replacement = match value {
@@ -122,7 +124,10 @@ fn render_command(
             Value::Bool(b) => b.to_string(),
             Value::Null => "null".to_string(),
             Value::Array(_) | Value::Object(_) => {
-                return Err(anyhow::anyhow!("Unsupported parameter type for placeholder {}: array or object", key));
+                return Err(anyhow::anyhow!(
+                    "Unsupported parameter type for placeholder {}: array or object",
+                    key
+                ));
             }
         };
         result = result.replace(&placeholder, &replacement);
@@ -143,7 +148,8 @@ impl Plugin for DynamicToolsPlugin {
 
     fn tools(&self) -> Vec<Arc<dyn Tool>> {
         match load_dynamic_tools() {
-            Ok(defs) => defs.into_iter()
+            Ok(defs) => defs
+                .into_iter()
                 .map(|def| Arc::new(DynamicTool::new(def)) as Arc<dyn Tool>)
                 .collect(),
             Err(e) => {
@@ -184,20 +190,34 @@ impl Tool for DynamicTool {
             ExecutionDef::Bash { command_template } => {
                 self.execute_bash(ctx, params, command_template).await
             }
-            ExecutionDef::Http { url, method, headers, body_template } => {
-                self.execute_http(ctx, params, url, method, headers, body_template).await
+            ExecutionDef::Http {
+                url,
+                method,
+                headers,
+                body_template,
+            } => {
+                self.execute_http(ctx, params, url, method, headers, body_template)
+                    .await
             }
         }
     }
 }
 
 impl DynamicTool {
-    async fn execute_bash(&self, ctx: &ToolContext, params: ToolParameters, command_template: &str) -> ToolResult {
+    async fn execute_bash(
+        &self,
+        ctx: &ToolContext,
+        params: ToolParameters,
+        command_template: &str,
+    ) -> ToolResult {
         // Render command template with parameters
-        let command = match render_command(command_template, &params, ctx, &self.def.secure_parameters) {
-            Ok(cmd) => cmd,
-            Err(e) => return ToolResult::error(format!("Failed to render command template: {}", e)),
-        };
+        let command =
+            match render_command(command_template, &params, ctx, &self.def.secure_parameters) {
+                Ok(cmd) => cmd,
+                Err(e) => {
+                    return ToolResult::error(format!("Failed to render command template: {}", e))
+                }
+            };
 
         // Execute command
         match Command::new("bash")
@@ -221,7 +241,15 @@ impl DynamicTool {
         }
     }
 
-    async fn execute_http(&self, _ctx: &ToolContext, _params: ToolParameters, _url: &str, _method: &str, _headers: &Option<HashMap<String, String>>, _body_template: &Option<String>) -> ToolResult {
+    async fn execute_http(
+        &self,
+        _ctx: &ToolContext,
+        _params: ToolParameters,
+        _url: &str,
+        _method: &str,
+        _headers: &Option<HashMap<String, String>>,
+        _body_template: &Option<String>,
+    ) -> ToolResult {
         ToolResult::error("HTTP execution not yet implemented")
     }
 }
@@ -229,30 +257,33 @@ impl DynamicTool {
 /// Load dynamic tools from built-in and user directories
 fn load_dynamic_tools() -> AnyResult<Vec<DynamicToolDef>> {
     let mut tools_map = std::collections::HashMap::new();
-    
+
     // Load built-in tools first
     if let Ok(builtin_dir) = builtin_tools_dir() {
         if builtin_dir.exists() {
             load_tools_from_dir(&builtin_dir, &mut tools_map)?;
         }
     }
-    
+
     // Load user tools (override built-in ones)
     let user_dir = user_tools_dir()?;
     // Create directory if it doesn't exist (no error if already exists)
     let _ = fs::create_dir_all(&user_dir);
-    
+
     if user_dir.exists() {
         load_tools_from_dir(&user_dir, &mut tools_map)?;
     }
-    
+
     // Convert to vector, preserving insertion order (built-in then user)
     let tools: Vec<DynamicToolDef> = tools_map.into_values().collect();
     Ok(tools)
 }
 
 /// Load tools from a directory into a map (name -> tool)
-fn load_tools_from_dir(dir: &Path, tools_map: &mut std::collections::HashMap<String, DynamicToolDef>) -> AnyResult<()> {
+fn load_tools_from_dir(
+    dir: &Path,
+    tools_map: &mut std::collections::HashMap<String, DynamicToolDef>,
+) -> AnyResult<()> {
     for entry in fs::read_dir(dir).context("Failed to read tools directory")? {
         let entry = entry.context("Failed to read directory entry")?;
         let path = entry.path();
@@ -270,7 +301,8 @@ fn load_tools_from_dir(dir: &Path, tools_map: &mut std::collections::HashMap<Str
 
 fn load_tool_from_file(path: &Path) -> AnyResult<DynamicToolDef> {
     let content = fs::read_to_string(path).context("Failed to read tool file")?;
-    let tool: DynamicToolDef = serde_json::from_str(&content).context("Failed to parse tool JSON")?;
+    let tool: DynamicToolDef =
+        serde_json::from_str(&content).context("Failed to parse tool JSON")?;
     Ok(tool)
 }
 
@@ -284,8 +316,7 @@ fn builtin_tools_dir() -> AnyResult<PathBuf> {
 
 /// Get user tools directory (~/.config/nanocode/tools)
 fn user_tools_dir() -> AnyResult<PathBuf> {
-    let mut path = dirs::config_dir()
-        .context("Could not find config directory")?;
+    let mut path = dirs::config_dir().context("Could not find config directory")?;
     path.push("nanocode");
     path.push("tools");
     Ok(path)
@@ -312,6 +343,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("/tmp"),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
         let result = render_command(template, &params, &ctx, &[]).unwrap();
         assert_eq!(result, "Hello world! Count: 5, flag: true");
@@ -324,6 +356,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("/tmp"),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
         // missing placeholder should remain unchanged
         let result = render_command(template, &params, &ctx, &[]).unwrap();
@@ -337,6 +370,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("/tmp"),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
         let result = render_command(template, &params, &ctx, &[]);
         assert!(result.is_err());
@@ -352,6 +386,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("/base"),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
         let secure_params = vec!["path".to_string()];
         let result = render_command(template, &params, &ctx, &secure_params).unwrap();
@@ -368,6 +403,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("/base"),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
         let secure_params = vec!["path".to_string()];
         let result = render_command(template, &params, &ctx, &secure_params);

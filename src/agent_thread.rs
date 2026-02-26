@@ -10,10 +10,7 @@ use tokio::sync::mpsc;
 
 /// Create a new agent thread with the given configuration and channels.
 /// Spawns the agent task and returns a handle to send requests.
-pub fn spawn(
-    config: Config,
-    ui_tx: mpsc::Sender<AgentToUi>,
-) -> mpsc::Sender<UiToAgent> {
+pub fn spawn(config: Config, ui_tx: mpsc::Sender<AgentToUi>) -> mpsc::Sender<UiToAgent> {
     let (agent_tx, agent_rx) = mpsc::channel(100);
 
     // Clone ui_tx for error reporting before moving into agent
@@ -44,11 +41,11 @@ pub fn spawn_with_agent(
     ui_tx: mpsc::Sender<AgentToUi>,
 ) -> mpsc::Sender<UiToAgent> {
     let (agent_tx, agent_rx) = mpsc::channel(100);
-    
+
     // Set channels on agent
     agent.set_agent_to_ui_tx(ui_tx.clone());
     agent.set_ui_to_agent_rx(agent_rx);
-    
+
     let ui_tx_clone = ui_tx.clone();
     tokio::spawn(async move {
         // Run agent; this will block until shutdown or channel closed
@@ -56,6 +53,6 @@ pub fn spawn_with_agent(
             let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
         }
     });
-    
+
     agent_tx
 }

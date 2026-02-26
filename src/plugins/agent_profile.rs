@@ -84,7 +84,9 @@ impl Tool for ProfileTool {
         // Create agent with profile
         let mut agent = match crate::Agent::new_with_profile(&self.profile.name, config) {
             Ok(agent) => agent,
-            Err(e) => return ToolResult::error(format!("Failed to create agent with profile: {}", e)),
+            Err(e) => {
+                return ToolResult::error(format!("Failed to create agent with profile: {}", e))
+            }
         };
 
         // Set working directory from parent context

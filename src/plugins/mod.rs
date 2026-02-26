@@ -12,4 +12,3 @@ pub use explore::ExplorePlugin;
 pub use file_ops::FileOpsPlugin;
 pub use git_ops::GitOpsPlugin;
 pub use task::TaskPlugin;
-

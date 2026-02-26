@@ -22,12 +22,18 @@ pub trait Ui {
     }
 
     /// Send a message to the agent (default implementation uses agent_tx).
-    async fn send_to_agent(&mut self, msg: UiToAgent) -> std::result::Result<(), mpsc::error::SendError<UiToAgent>> {
+    async fn send_to_agent(
+        &mut self,
+        msg: UiToAgent,
+    ) -> std::result::Result<(), mpsc::error::SendError<UiToAgent>> {
         self.agent_tx().send(msg).await
     }
 
     /// Try to send a message to the agent without waiting (default implementation uses agent_tx).
-    fn try_send_to_agent(&mut self, msg: UiToAgent) -> std::result::Result<(), mpsc::error::TrySendError<UiToAgent>> {
+    fn try_send_to_agent(
+        &mut self,
+        msg: UiToAgent,
+    ) -> std::result::Result<(), mpsc::error::TrySendError<UiToAgent>> {
         self.agent_tx().try_send(msg)
     }
 

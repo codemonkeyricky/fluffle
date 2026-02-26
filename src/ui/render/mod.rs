@@ -4,12 +4,12 @@
 //! `FlexRenderable`) that allow widgets to declare their height requirements and
 //! render themselves within a fixed‑width rectangle.
 
-mod renderable;
 mod column;
 mod flex;
+mod renderable;
 mod utils;
 
-pub use renderable::Renderable;
 pub use column::ColumnRenderable;
-pub use flex::{FlexRenderable, FlexItem};
-pub use utils::{prefix_lines, word_wrap_lines, simple_renderable};
+pub use flex::{FlexItem, FlexRenderable};
+pub use renderable::Renderable;
+pub use utils::{prefix_lines, simple_renderable, word_wrap_lines};

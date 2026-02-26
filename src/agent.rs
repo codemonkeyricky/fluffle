@@ -61,15 +61,16 @@ impl Agent {
 
     /// Create agent with a specific profile
     pub fn new_with_profile(profile_name: &str, config: Config) -> Result<Self> {
-        let profile = profile_loader::get_profile(profile_name)
-            .ok_or_else(|| crate::error::Error::Agent(format!("Profile not found: {}", profile_name)))?;
-        
+        let profile = profile_loader::get_profile(profile_name).ok_or_else(|| {
+            crate::error::Error::Agent(format!("Profile not found: {}", profile_name))
+        })?;
+
         // Create base agent
         let mut agent = Self::new(config)?;
-        
+
         // Apply profile configuration
         agent.apply_profile(&profile)?;
-        
+
         Ok(agent)
     }
 
@@ -97,10 +98,12 @@ impl Agent {
 
     /// Filter tools to only include those in the whitelist
     fn filter_tools(&mut self, tool_names: &[String]) -> Result<()> {
-        let available_tools: HashMap<String, Arc<dyn crate::plugin::Tool>> = self.tools.iter()
+        let available_tools: HashMap<String, Arc<dyn crate::plugin::Tool>> = self
+            .tools
+            .iter()
             .map(|t| (t.name().to_string(), t.clone()))
             .collect();
-        
+
         let mut filtered = Vec::new();
         for name in tool_names {
             if let Some(tool) = available_tools.get(name) {
@@ -113,18 +116,24 @@ impl Agent {
                     continue;
                 }
                 // Return error for unknown tools
-                return Err(crate::error::Error::Agent(format!("Unknown tool in profile: {}", name)));
+                return Err(crate::error::Error::Agent(format!(
+                    "Unknown tool in profile: {}",
+                    name
+                )));
             }
         }
-        
+
         self.tools = filtered;
         Ok(())
     }
 
     /// Apply configuration overrides from profile
-    fn apply_config_overrides(&mut self, overrides: &std::collections::HashMap<String, serde_json::Value>) -> Result<()> {
+    fn apply_config_overrides(
+        &mut self,
+        overrides: &std::collections::HashMap<String, serde_json::Value>,
+    ) -> Result<()> {
         use serde_json::Value;
-        
+
         for (key, value) in overrides {
             match key.as_str() {
                 "temperature" => {
@@ -158,13 +167,11 @@ impl Agent {
                         self.config.provider = provider.clone();
                     }
                 }
-                "api_key" => {
-                    match value {
-                        Value::String(key) => self.config.api_key = Some(key.clone()),
-                        Value::Null => self.config.api_key = None,
-                        _ => {}
-                    }
-                }
+                "api_key" => match value {
+                    Value::String(key) => self.config.api_key = Some(key.clone()),
+                    Value::Null => self.config.api_key = None,
+                    _ => {}
+                },
                 _ => {
                     tracing::warn!("Unknown config override key: {}", key);
                 }
@@ -213,10 +220,14 @@ impl Agent {
     pub async fn run(&mut self) -> Result<()> {
         // Verify channels are set
         if self.ui_to_agent_rx.is_none() {
-            return Err(crate::error::Error::Agent("ui_to_agent_rx not set".to_string()));
+            return Err(crate::error::Error::Agent(
+                "ui_to_agent_rx not set".to_string(),
+            ));
         }
         if self.context.agent_to_ui_tx.is_none() {
-            return Err(crate::error::Error::Agent("agent_to_ui_tx not set".to_string()));
+            return Err(crate::error::Error::Agent(
+                "agent_to_ui_tx not set".to_string(),
+            ));
         }
 
         loop {
@@ -225,17 +236,33 @@ impl Agent {
                 None => break,
             };
             match request {
-                UiToAgent::Request(input) => {
-                    match self.process(&input).await {
-                        Ok(response) => {
-                            let _ = self.context.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Response(response)).await;
-                            let _ = self.context.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::TokenUsage(self.token_usage().clone())).await;
-                        }
-                        Err(e) => {
-                            let _ = self.context.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Error(e.to_string())).await;
-                        }
+                UiToAgent::Request(input) => match self.process(&input).await {
+                    Ok(response) => {
+                        let _ = self
+                            .context
+                            .agent_to_ui_tx
+                            .as_ref()
+                            .unwrap()
+                            .send(AgentToUi::Response(response))
+                            .await;
+                        let _ = self
+                            .context
+                            .agent_to_ui_tx
+                            .as_ref()
+                            .unwrap()
+                            .send(AgentToUi::TokenUsage(self.token_usage().clone()))
+                            .await;
                     }
-                }
+                    Err(e) => {
+                        let _ = self
+                            .context
+                            .agent_to_ui_tx
+                            .as_ref()
+                            .unwrap()
+                            .send(AgentToUi::Error(e.to_string()))
+                            .await;
+                    }
+                },
                 UiToAgent::Shutdown => {
                     break;
                 }
@@ -296,8 +323,6 @@ impl Agent {
     pub fn set_context(&mut self, context: ToolContext) {
         self.context = context;
     }
-
-
 
     /// Discover all tools registered via the plugin inventory.
     /// This method scans the compile-time plugin registry and collects
@@ -391,7 +416,8 @@ impl Agent {
 
             // Push tool call messages to UI
             for tool_call in &ai_response.tool_calls {
-                self.push_tool_call(&tool_call.name, &tool_call.arguments).await;
+                self.push_tool_call(&tool_call.name, &tool_call.arguments)
+                    .await;
             }
 
             // Execute all tool calls
@@ -423,7 +449,8 @@ impl Agent {
                     } else {
                         result.error_message().unwrap_or("Unknown error")
                     },
-                ).await;
+                )
+                .await;
             }
 
             // Continue to next iteration
@@ -579,10 +606,6 @@ mod tests {
         // Compare api_key (both are Option<String>)
         assert_eq!(stored_config.api_key, config.api_key);
     }
-
-
-
-
 
     #[tokio::test]
     async fn test_agent_pushes_tool_messages_during_iteration() {

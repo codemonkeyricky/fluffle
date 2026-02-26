@@ -18,7 +18,9 @@ mod tests {
             max_tool_iterations: 10,
         };
         let (ui_to_agent_tx, _) = mpsc::channel(100);
-        let app = App::new(config, ui_to_agent_tx).await.expect("App creation failed");
+        let app = App::new(config, ui_to_agent_tx)
+            .await
+            .expect("App creation failed");
         assert_eq!(app.pending_requests, 0);
         assert!(app.messages.is_empty());
     }

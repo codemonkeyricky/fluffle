@@ -48,7 +48,7 @@ fn parse_args(args: std::env::Args) -> Args {
 async fn main() -> Result<()> {
     let args = parse_args(std::env::args());
     let config = Config::load().await?;
-    
+
     let mut ui = create_ui(config, args.headless, args.prompt).await?;
     ui.run().await
 }

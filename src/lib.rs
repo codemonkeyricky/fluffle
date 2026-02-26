@@ -19,13 +19,13 @@
 pub mod agent;
 pub mod agent_profile;
 pub mod agent_thread;
-pub mod profile_loader;
 pub mod ai;
 pub mod config;
 pub mod error;
 pub mod messaging;
 pub mod plugin;
 pub mod plugins;
+pub mod profile_loader;
 pub mod types;
 pub mod ui;
 
@@ -41,4 +41,4 @@ pub use error::{Error, Result};
 pub use messaging::{AgentToUi, UiToAgent};
 pub use plugin::{Plugin, Tool};
 pub use types::{ToolContext, ToolParameters, ToolResult};
-pub use ui::{App, Event, EventHandler, Ui, create_ui};
+pub use ui::{create_ui, App, Event, EventHandler, Ui};
