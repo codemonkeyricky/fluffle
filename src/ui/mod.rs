@@ -1,11 +1,17 @@
 pub mod app;
+pub mod channels;
 pub mod components;
 pub mod event;
 pub mod ui_trait;
 pub mod headless_backend;
 pub mod terminal_backend;
+pub mod render;
+pub mod history_cell;
+pub mod bottom_pane;
+pub mod advanced_tui;
 
 pub use app::App;
+pub use channels::UiChannels;
 pub use event::{Event, EventHandler};
 pub use ui_trait::Ui;
 

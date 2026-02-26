@@ -11,10 +11,8 @@ const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access
 
 /// Headless UI backend that prints to stdout.
 pub struct HeadlessUi {
-    /// Receiver for messages from agent thread.
-    agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
-    /// Sender for requests to agent thread.
-    ui_to_agent_tx: mpsc::Sender<UiToAgent>,
+    /// Shared channels for UI↔agent communication.
+    channels: crate::ui::UiChannels,
     /// Optional initial prompt to send immediately.
     prompt: Option<String>,
 }
@@ -33,9 +31,13 @@ impl HeadlessUi {
         // Spawn agent thread with existing agent
         let ui_to_agent_tx = spawn_with_agent(agent, agent_to_ui_tx);
         
-        Ok(Self {
+        let channels = crate::ui::UiChannels {
             agent_to_ui_rx,
             ui_to_agent_tx,
+        };
+        
+        Ok(Self {
+            channels,
             prompt,
         })
     }
@@ -71,14 +73,14 @@ impl Ui for HeadlessUi {
         }
 
         // Send request to agent
-        self.ui_to_agent_tx
+        self.channels.ui_to_agent_tx
             .send(UiToAgent::Request(input))
             .await
             .map_err(|e| crate::error::Error::Ai(format!("Failed to send request: {}", e)))?;
         
         // Collect and print responses
         let mut final_response = None;
-        while let Some(msg) = self.agent_to_ui_rx.recv().await {
+        while let Some(msg) = self.channels.agent_to_ui_rx.recv().await {
             match msg {
                 AgentToUi::ToolCall(text) => {
                     println!("{}", text);
@@ -110,7 +112,7 @@ impl Ui for HeadlessUi {
         }
         
         // Send shutdown signal
-        let _ = self.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
+        let _ = self.channels.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
         
         Ok(())
     }

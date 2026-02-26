@@ -1,7 +1,7 @@
 use crate::agent_thread::spawn;
 use crate::config::Config;
 use crate::error::Result;
-use crate::messaging::{AgentToUi, UiToAgent};
+use crate::messaging::UiToAgent;
 use crate::ui::components;
 use crate::ui::ui_trait::Ui;
 use crate::ui::{App, Event, EventHandler};
@@ -80,10 +80,8 @@ pub struct TerminalUi {
     app: App,
     /// Event handler for user input.
     event_handler: EventHandler,
-    /// Receiver for messages from agent thread.
-    agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
-    /// Sender for requests to agent thread.
-    ui_to_agent_tx: mpsc::Sender<UiToAgent>,
+    /// Shared channels for UI↔agent communication.
+    channels: crate::ui::UiChannels,
 }
 
 impl TerminalUi {
@@ -104,12 +102,16 @@ impl TerminalUi {
         let app = App::new(config, ui_to_agent_tx).await?;
         let event_handler = EventHandler::new(250);
         
+        let channels = crate::ui::UiChannels {
+            agent_to_ui_rx,
+            ui_to_agent_tx: ui_to_agent_tx_clone,
+        };
+        
         Ok(Self {
             guard,
             app,
             event_handler,
-            agent_to_ui_rx,
-            ui_to_agent_tx: ui_to_agent_tx_clone,
+            channels,
         })
     }
 }
@@ -133,7 +135,7 @@ impl Ui for TerminalUi {
                                 if !self.app.input.is_empty() {
                                     let input = std::mem::take(&mut self.app.input);
                                     self.app.messages.push(format!("> {}", input));
-                                    match self.ui_to_agent_tx.try_send(UiToAgent::Request(input)) {
+                                    match self.channels.ui_to_agent_tx.try_send(UiToAgent::Request(input)) {
                                         Ok(()) => {
                                             self.app.pending_requests += 1;
                                         }
@@ -157,7 +159,7 @@ impl Ui for TerminalUi {
                         Event::TaskCompleted => {}
                     }
                 }
-                Some(msg) = self.agent_to_ui_rx.recv() => {
+                Some(msg) = self.channels.agent_to_ui_rx.recv() => {
                     self.app.handle_agent_message(msg);
                 }
                 else => break,
@@ -169,7 +171,7 @@ impl Ui for TerminalUi {
         }
 
         // Send shutdown signal to agent thread
-        let _ = self.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
+        let _ = self.channels.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
         Ok(())
     }
 }
