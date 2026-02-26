@@ -11,7 +11,7 @@ pub struct App {
     pub input: String,
     pub should_quit: bool,
     pub status: StatusInfo,
-    pub waiting_for_response: bool,
+    pub pending_requests: usize,
     pub token_usage: TokenUsage,
 }
 
@@ -40,21 +40,16 @@ impl App {
             input: String::new(),
             should_quit: false,
             status,
-            waiting_for_response: false,
+            pending_requests: 0,
             token_usage: TokenUsage::default(),
         })
     }
 
     /// Handles the current input asynchronously by sending request to agent thread.
     /// Returns immediately, allowing the UI to remain responsive during processing.
-    /// Use `is_processing()` to check if waiting for response.
+    /// Use `is_processing()` to check if there are pending requests.
     pub async fn handle_input(&mut self) -> Result<()> {
         if self.input.trim().is_empty() {
-            return Ok(());
-        }
-
-        // Don't send new request if waiting for response
-        if self.waiting_for_response {
             return Ok(());
         }
 
@@ -68,13 +63,13 @@ impl App {
             return Ok(());
         }
 
-        self.waiting_for_response = true;
+        self.pending_requests += 1;
         Ok(())
     }
 
-    /// Returns true if waiting for a response from agent thread.
+    /// Returns true if there are pending requests to the agent thread.
     pub fn is_processing(&self) -> bool {
-        self.waiting_for_response
+        self.pending_requests > 0
     }
 
     /// Returns the current token usage for the agent session.
@@ -97,12 +92,12 @@ impl App {
             }
             AgentToUi::Response(text) => {
                 self.messages.push(text);
-                self.waiting_for_response = false;
+                self.pending_requests = self.pending_requests.saturating_sub(1);
                 true
             }
             AgentToUi::Error(text) => {
                 self.messages.push(text);
-                self.waiting_for_response = false;
+                self.pending_requests = self.pending_requests.saturating_sub(1);
                 true
             }
             AgentToUi::TokenUsage(usage) => {

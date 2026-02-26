@@ -151,7 +151,18 @@ async fn main() -> Result<()> {
                                     app.quit();
                                 }
                                 KeyCode::Enter => {
-                                    app.handle_input().await?;
+                                    if !app.input.is_empty() {
+                                        let input = std::mem::take(&mut app.input);
+                                        app.messages.push(format!("> {}", input));
+                                        match ui_to_agent_tx_clone.try_send(UiToAgent::Request(input)) {
+                                            Ok(()) => {
+                                                app.pending_requests += 1;
+                                            }
+                                            Err(e) => {
+                                                app.messages.push(format!("Error queuing request: {}", e));
+                                            }
+                                        }
+                                    }
                                 }
                                 KeyCode::Char(c) => {
                                     app.input.push(c);
