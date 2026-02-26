@@ -224,6 +224,18 @@ impl AdvancedTerminalUi {
 
 #[async_trait]
 impl Ui for AdvancedTerminalUi {
+    fn agent_rx(&mut self) -> &mut mpsc::Receiver<AgentToUi> {
+        &mut self.channels.agent_to_ui_rx
+    }
+
+    fn agent_tx(&mut self) -> &mut mpsc::Sender<UiToAgent> {
+        &mut self.channels.ui_to_agent_tx
+    }
+
+    async fn next_user_event(&mut self) -> Option<Event> {
+        self.event_handler.next().await
+    }
+
     async fn run(&mut self) -> Result<()> {
         loop {
             let terminal = self.guard.terminal_mut();
@@ -259,7 +271,7 @@ impl Ui for AdvancedTerminalUi {
             })?;
             
             tokio::select! {
-                Some(event) = self.event_handler.next() => {
+                 Some(event) = self.event_handler.next() => {
                     match event {
                         Event::Key(key) => match key.code {
                             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -273,7 +285,7 @@ impl Ui for AdvancedTerminalUi {
                                         let user_cell = PlainHistoryCell::new(format!("> {}", input));
                                         self.chat_widget.push_history(Box::new(user_cell));
                                         // Send request to agent
-                                        if let Err(e) = self.channels.ui_to_agent_tx.send(UiToAgent::Request(input)).await {
+                                        if let Err(e) = self.send_to_agent(UiToAgent::Request(input)).await {
                                             let error_cell = PlainHistoryCell::new(format!("Error sending request: {}", e));
                                             self.chat_widget.push_history(Box::new(error_cell));
                                         }
@@ -314,7 +326,7 @@ impl Ui for AdvancedTerminalUi {
         }
         
         // Send shutdown signal to agent thread
-        let _ = self.channels.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
+        let _ = self.send_to_agent(UiToAgent::Shutdown).await;
         Ok(())
     }
 }

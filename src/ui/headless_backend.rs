@@ -60,6 +60,14 @@ impl HeadlessUi {
 
 #[async_trait]
 impl Ui for HeadlessUi {
+    fn agent_rx(&mut self) -> &mut mpsc::Receiver<AgentToUi> {
+        &mut self.channels.agent_to_ui_rx
+    }
+
+    fn agent_tx(&mut self) -> &mut mpsc::Sender<UiToAgent> {
+        &mut self.channels.ui_to_agent_tx
+    }
+
     async fn run(&mut self) -> Result<()> {
         // Determine input: use provided prompt or read from stdin
         let input = match self.prompt.take() {
@@ -73,14 +81,13 @@ impl Ui for HeadlessUi {
         }
 
         // Send request to agent
-        self.channels.ui_to_agent_tx
-            .send(UiToAgent::Request(input))
+        self.send_to_agent(UiToAgent::Request(input))
             .await
             .map_err(|e| crate::error::Error::Ai(format!("Failed to send request: {}", e)))?;
         
         // Collect and print responses
         let mut final_response = None;
-        while let Some(msg) = self.channels.agent_to_ui_rx.recv().await {
+        while let Some(msg) = self.recv_from_agent().await {
             match msg {
                 AgentToUi::ToolCall(text) => {
                     println!("{}", text);
@@ -112,7 +119,7 @@ impl Ui for HeadlessUi {
         }
         
         // Send shutdown signal
-        let _ = self.channels.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
+        let _ = self.send_to_agent(UiToAgent::Shutdown).await;
         
         Ok(())
     }

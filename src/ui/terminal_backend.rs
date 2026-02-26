@@ -1,7 +1,7 @@
 use crate::agent_thread::spawn;
 use crate::config::Config;
 use crate::error::Result;
-use crate::messaging::UiToAgent;
+use crate::messaging::{AgentToUi, UiToAgent};
 use crate::ui::components;
 use crate::ui::ui_trait::Ui;
 use crate::ui::{App, Event, EventHandler};
@@ -118,6 +118,18 @@ impl TerminalUi {
 
 #[async_trait]
 impl Ui for TerminalUi {
+    fn agent_rx(&mut self) -> &mut mpsc::Receiver<AgentToUi> {
+        &mut self.channels.agent_to_ui_rx
+    }
+
+    fn agent_tx(&mut self) -> &mut mpsc::Sender<UiToAgent> {
+        &mut self.channels.ui_to_agent_tx
+    }
+
+    async fn next_user_event(&mut self) -> Option<Event> {
+        self.event_handler.next().await
+    }
+
     async fn run(&mut self) -> Result<()> {
         loop {
             self.guard.terminal_mut().draw(|f| {
@@ -125,7 +137,7 @@ impl Ui for TerminalUi {
             })?;
 
             tokio::select! {
-                Some(event) = self.event_handler.next() => {
+                 Some(event) = self.event_handler.next() => {
                     match event {
                         Event::Key(key) => match key.code {
                             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -135,7 +147,7 @@ impl Ui for TerminalUi {
                                 if !self.app.input.is_empty() {
                                     let input = std::mem::take(&mut self.app.input);
                                     self.app.messages.push(format!("> {}", input));
-                                    match self.channels.ui_to_agent_tx.try_send(UiToAgent::Request(input)) {
+                                     match self.try_send_to_agent(UiToAgent::Request(input)) {
                                         Ok(()) => {
                                             self.app.pending_requests += 1;
                                         }
@@ -171,7 +183,7 @@ impl Ui for TerminalUi {
         }
 
         // Send shutdown signal to agent thread
-        let _ = self.channels.ui_to_agent_tx.send(UiToAgent::Shutdown).await;
+        let _ = self.send_to_agent(UiToAgent::Shutdown).await;
         Ok(())
     }
 }
