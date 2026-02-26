@@ -115,9 +115,10 @@ impl Tool for GitDiffTool {
 
 static GIT_OPS_PLUGIN: GitOpsPlugin = GitOpsPlugin;
 
-inventory::submit! {
-    &GIT_OPS_PLUGIN as &'static dyn Plugin
-}
+// Disabled in favor of JSON-based dynamic tools
+// inventory::submit! {
+//     &GIT_OPS_PLUGIN as &'static dyn Plugin
+// }
 
 #[cfg(test)]
 mod tests {

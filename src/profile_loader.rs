@@ -5,6 +5,7 @@ use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 
 lazy_static! {
@@ -12,8 +13,15 @@ lazy_static! {
         RwLock::new(HashMap::new());
 }
 
+static PROFILES_LOADED: AtomicBool = AtomicBool::new(false);
+
 /// Load all profiles from built-in and user directories
 pub fn load_profiles() -> Result<()> {
+    // Skip if already loaded
+    if PROFILES_LOADED.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
     let mut registry = PROFILE_REGISTRY.write().map_err(|e| {
         Error::Agent(format!(
             "Failed to acquire write lock on profile registry: {}",
@@ -36,6 +44,7 @@ pub fn load_profiles() -> Result<()> {
         load_profiles_from_dir(&user_dir, &mut registry)?;
     }
 
+    PROFILES_LOADED.store(true, Ordering::SeqCst);
     Ok(())
 }
 
@@ -61,6 +70,7 @@ pub fn profile_names() -> Vec<String> {
 pub(crate) fn clear_profiles() {
     let mut registry = PROFILE_REGISTRY.write().unwrap();
     registry.clear();
+    PROFILES_LOADED.store(false, Ordering::SeqCst);
 }
 
 /// Get built-in profiles directory (relative to source)

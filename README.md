@@ -8,6 +8,7 @@ A Claude-Code-like code agent with plugin architecture, built in Rust.
 - **Multiple AI providers:** Supports OpenAI and Anthropic via abstraction layer
 - **TUI interface:** Terminal user interface with Ratatui (four-pane layout)
 - **Built-in tools:** File operations, bash execution, git operations, subagent creation, codebase exploration
+- **Dynamic tool loading:** Define custom tools via JSON files without writing Rust code
 - **Configuration:** Layered config system with `.env` support
 
 ## Installation
@@ -67,6 +68,75 @@ explore(description="Understand the project structure and main components")
 ```
 
 Subagents run synchronously with isolated conversation history and inherit the parent agent's configuration and tools. They return a summarized result to the main conversation.
+
+## Dynamic Tools
+
+You can define custom tools via JSON files without writing Rust code. Place tool definition files in `~/.config/nanocode/tools/` with a `.json` extension.
+
+### Tool Definition Format
+
+```json
+{
+  "name": "echo_tool",
+  "description": "Echoes the input text",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Text to echo"
+      }
+    },
+    "required": ["text"]
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "echo {{text}}"
+  }
+}
+```
+
+Supported execution types:
+- **bash**: Executes a bash command with parameter substitution using `{{param}}` placeholders.
+- **http**: (Planned) Makes HTTP requests.
+
+### Example: List Files Tool
+
+```json
+{
+  "name": "list_files",
+  "description": "List files in a directory",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Directory path",
+        "default": "."
+      }
+    },
+    "required": []
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "ls -la {{path}}"
+  }
+}
+```
+
+Tools are loaded at startup and appear in the agent's available tool list. You can reference them in agent profiles.
+
+### Migrated Built-in Plugins
+
+Several built-in plugins have been migrated to JSON tool definitions:
+
+1. **bash_exec** → `bash_exec.json`: Generic bash command execution
+2. **git_status** → `git_status.json`: Git status command  
+3. **git_diff** → `git_diff.json`: Git diff with optional path parameter
+
+These JSON files are automatically loaded from `~/.config/nanocode/tools/`. The corresponding Rust plugins are disabled in favor of the dynamic versions.
+
+**Note**: File operations (`file_read`, `file_write`, `file_list`) remain as Rust plugins due to security requirements and complex parameter handling. They may be migrated in the future with enhanced dynamic tool capabilities.
 
 ## Development
 
@@ -143,6 +213,8 @@ inventory::submit! {
     &MY_PLUGIN as &'static dyn Plugin
 }
 ```
+
+For simpler tool definitions without Rust coding, see [Dynamic Tools](#dynamic-tools) above.
 
 ## License
 

@@ -76,9 +76,10 @@ impl Tool for BashExecTool {
 
 static BASH_EXEC_PLUGIN: BashExecPlugin = BashExecPlugin;
 
-inventory::submit! {
-    &BASH_EXEC_PLUGIN as &'static dyn Plugin
-}
+// Disabled in favor of JSON-based dynamic tools
+// inventory::submit! {
+//     &BASH_EXEC_PLUGIN as &'static dyn Plugin
+// }
 
 #[cfg(test)]
 mod tests {
