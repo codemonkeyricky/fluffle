@@ -26,7 +26,7 @@ pub async fn create_ui(config: Config, headless: bool, prompt: Option<String>) -
             Ok(Box::new(ui))
         }
         false => {
-            let ui = terminal_backend::TerminalUi::new(config).await?;
+            let ui = advanced_tui::AdvancedTerminalUi::new(config).await?;
             Ok(Box::new(ui))
         }
     }

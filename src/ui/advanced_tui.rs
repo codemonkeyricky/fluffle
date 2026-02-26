@@ -1,4 +1,5 @@
 use crate::agent_thread::spawn;
+use crate::ai::TokenUsage;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
@@ -166,6 +167,12 @@ pub struct AdvancedTerminalUi {
     channels: crate::ui::UiChannels,
     /// Event handler for user input.
     event_handler: EventHandler,
+    /// Current model name.
+    model: String,
+    /// Current provider name.
+    provider: String,
+    /// Token usage statistics.
+    token_usage: TokenUsage,
 }
 
 impl AdvancedTerminalUi {
@@ -199,7 +206,19 @@ impl AdvancedTerminalUi {
             bottom_pane,
             channels,
             event_handler,
+            model: config.model.clone(),
+            provider: config.provider.clone(),
+            token_usage: TokenUsage::default(),
         })
+    }
+    
+    fn render_status_line(area: Rect, buf: &mut Buffer, model: &str, provider: &str, token_usage: &TokenUsage) {
+        use ratatui::{style::{Style, Color}, text::Line, widgets::{Paragraph, Widget}};
+        let status_text = format!("nano code | Model: {} | Provider: {} | Tokens: {}", 
+            model, provider, token_usage.total_tokens);
+        let paragraph = Paragraph::new(Line::from(status_text))
+            .style(Style::default().fg(Color::Yellow));
+        paragraph.render(area, buf);
     }
 }
 
@@ -211,19 +230,32 @@ impl Ui for AdvancedTerminalUi {
             let terminal_size = terminal.size()?;
             
             // Compute layout
+            let status_height = 1;
             let bottom_pane_height = self.bottom_pane.required_height(terminal_size.width);
-            let available_height = terminal_size.height.saturating_sub(bottom_pane_height);
-            let viewport_height = available_height.max(1);
+            let max_bottom_height = terminal_size.height.saturating_sub(status_height);
+            let bottom_pane_height = bottom_pane_height.min(max_bottom_height);
+            let available_for_viewport = terminal_size.height.saturating_sub(bottom_pane_height + status_height);
+            let viewport_height = available_for_viewport.max(1);
             
             let viewport_rect = Rect::new(0, 0, terminal_size.width, viewport_height);
             let bottom_pane_rect = Rect::new(0, viewport_height, terminal_size.width, bottom_pane_height);
+            let status_rect = Rect::new(0, viewport_height + bottom_pane_height, terminal_size.width, status_height);
+            
+            // Extract mutable references to widgets for use in closure
+            let chat_widget = &mut self.chat_widget;
+            let bottom_pane = &mut self.bottom_pane;
+            let model = &self.model;
+            let provider = &self.provider;
+            let token_usage = &self.token_usage;
             
             // Draw
             terminal.draw(|frame| {
                 // Render chat widget into viewport
-                self.chat_widget.render(viewport_rect, frame.buffer_mut());
+                chat_widget.render(viewport_rect, frame.buffer_mut());
                 // Render bottom pane
-                self.bottom_pane.render(bottom_pane_rect, frame.buffer_mut());
+                bottom_pane.render(bottom_pane_rect, frame.buffer_mut());
+                // Render status line
+                Self::render_status_line(status_rect, frame.buffer_mut(), model, provider, token_usage);
             })?;
             
             tokio::select! {
@@ -267,9 +299,15 @@ impl Ui for AdvancedTerminalUi {
                     }
                 }
                 Some(msg) = self.channels.agent_to_ui_rx.recv() => {
-                    // Convert agent message to history cell and add to chat widget
-                    let cell = self.chat_widget.cell_from_agent_message(msg);
-                    self.chat_widget.push_history(cell);
+                    match msg {
+                        AgentToUi::TokenUsage(usage) => {
+                            self.token_usage = usage;
+                        }
+                        _ => {
+                            let cell = self.chat_widget.cell_from_agent_message(msg);
+                            self.chat_widget.push_history(cell);
+                        }
+                    }
                 }
                 else => break,
             }
