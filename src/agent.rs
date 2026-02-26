@@ -76,6 +76,24 @@ impl Agent {
         self.ui_to_agent_rx = Some(rx);
     }
 
+    /// Log a message to agent.log file.
+    fn log_to_agent_file(&self, message: &str) {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let line = format!("[{}] {}", timestamp, message);
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("agent.log")
+        {
+            let _ = writeln!(file, "{}", line);
+        }
+    }
+
     /// Run the agent, blocking on messages from UI and processing them serially.
     /// Requires both channels to be set via `set_agent_to_ui_tx` and `set_ui_to_agent_rx`.
     /// Sends responses, errors, and token usage back via `agent_to_ui_tx`.
@@ -233,18 +251,18 @@ impl Agent {
 
             // Accumulate token usage
             if let Some(usage) = ai_response.token_usage {
-                println!("=== TOKEN USAGE ===");
-                println!(
+                self.log_to_agent_file("=== TOKEN USAGE ===");
+                self.log_to_agent_file(&format!(
                     "Prompt tokens: {}, Completion tokens: {}, Total tokens: {}",
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
-                );
+                ));
                 self.token_usage += usage.clone();
-                println!(
+                self.log_to_agent_file(&format!(
                     "Cumulative: prompt: {}, completion: {}, total: {}",
                     self.token_usage.prompt_tokens,
                     self.token_usage.completion_tokens,
                     self.token_usage.total_tokens
-                );
+                ));
             }
 
             // Check if we have a final response (no tool calls)
@@ -310,12 +328,12 @@ impl Agent {
 
         for tool_call in tool_calls {
             // Log the tool call
-            println!("=== TOOL CALL: {} ===", tool_call.name);
-            println!(
+            self.log_to_agent_file(&format!("=== TOOL CALL: {} ===", tool_call.name));
+            self.log_to_agent_file(&format!(
                 "Arguments: {}",
                 serde_json::to_string_pretty(&tool_call.arguments)
                     .unwrap_or_else(|_| "{}".to_string())
-            );
+            ));
 
             // Execute the tool
             let tool_result = self.execute_tool(tool_call).await;
