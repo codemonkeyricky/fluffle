@@ -107,12 +107,6 @@ impl App {
         }
     }
 
-    /// Cancels any ongoing background processing task.
-    /// Note: With agent thread architecture, cancellation is not currently supported.
-    pub fn cancel_processing(&mut self) {
-        // Cancellation not supported with agent thread architecture
-    }
-
     pub fn quit(&mut self) {
         self.should_quit = true;
     }

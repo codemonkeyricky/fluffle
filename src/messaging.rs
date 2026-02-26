@@ -28,19 +28,3 @@ pub enum AgentToUi {
     /// Token usage statistics.
     TokenUsage(TokenUsage),
 }
-
-impl AgentToUi {
-    /// Convert the message to a displayable string.
-    pub fn to_display_string(&self) -> String {
-        match self {
-            AgentToUi::ToolCall(msg) => format!("Tool call: {}", msg),
-            AgentToUi::ToolResult(msg) => format!("Result: {}", msg),
-            AgentToUi::Response(msg) => msg.clone(),
-            AgentToUi::Error(msg) => format!("Error: {}", msg),
-            AgentToUi::TokenUsage(usage) => format!(
-                "Tokens: prompt={}, completion={}, total={}",
-                usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
-            ),
-        }
-    }
-}
