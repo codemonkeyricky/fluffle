@@ -7,9 +7,20 @@ mod tests {
     #[tokio::test]
     async fn test_app_new_with_async_agent() {
         // Verify App initializes with no pending async task or result
-        let app = App::new().await.expect("App creation failed");
-        assert!(app.processing_task.is_none());
-        assert!(app.pending_result.is_none());
+        use nanocode::config::Config;
+        use tokio::sync::mpsc;
+        let config = Config {
+            model: "gpt-3.5-turbo".to_string(),
+            api_key: Some("dummy".to_string()),
+            provider: "openai".to_string(),
+            max_tokens: 100,
+            temperature: 0.5,
+            max_tool_iterations: 10,
+        };
+        let (ui_to_agent_tx, _) = mpsc::channel(100);
+        let app = App::new(config, ui_to_agent_tx).await.expect("App creation failed");
+        assert!(!app.waiting_for_response);
+        assert!(app.messages.is_empty());
     }
 
     #[tokio::test]

@@ -127,14 +127,14 @@ async fn main() -> Result<()> {
         let config = nanocode::config::Config::load().await?;
         
         // Create channel for agent->UI updates
-        let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
+        let (agent_to_ui_tx, mut agent_to_ui_rx) = mpsc::channel(100);
         
         // Spawn agent thread (returns sender for UI->agent requests)
         let ui_to_agent_tx = spawn(config.clone(), agent_to_ui_tx);
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
         
         // Create UI app with channels
-        let mut app = App::new(config, ui_to_agent_tx, agent_to_ui_rx).await?;
+        let mut app = App::new(config, ui_to_agent_tx).await?;
         let mut event_handler = EventHandler::new(250);
 
         let result = async {
@@ -143,33 +143,34 @@ async fn main() -> Result<()> {
                     nanocode::ui::components::render(f, &app);
                 })?;
 
-                match event_handler.next().await {
-                    Some(Event::Key(key)) => match key.code {
-                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                            app.quit();
-                        }
-                        KeyCode::Enter => {
-                            app.handle_input().await?;
-                        }
-                        KeyCode::Char(c) => {
-                            app.input.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            app.input.pop();
-                        }
-                        _ => {}
-                    },
-                    Some(Event::Tick) => {
-                        // Poll for messages from agent thread
-                        if app.poll_agent_messages().await {
-                            // Force redraw if messages received
-                            continue;
+                tokio::select! {
+                    Some(event) = event_handler.next() => {
+                        match event {
+                            Event::Key(key) => match key.code {
+                                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                    app.quit();
+                                }
+                                KeyCode::Enter => {
+                                    app.handle_input().await?;
+                                }
+                                KeyCode::Char(c) => {
+                                    app.input.push(c);
+                                }
+                                KeyCode::Backspace => {
+                                    app.input.pop();
+                                }
+                                _ => {}
+                            },
+                            Event::Tick => {
+                                // Tick events can be used for periodic UI updates
+                            }
+                            Event::TaskCompleted => {}
                         }
                     }
-                    Some(Event::TaskCompleted) => {}
-                    None => {
-                        break;
+                    Some(msg) = agent_to_ui_rx.recv() => {
+                        app.handle_agent_message(msg);
                     }
+                    else => break,
                 }
 
                 if app.should_quit {

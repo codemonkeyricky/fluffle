@@ -7,7 +7,6 @@ use tokio::sync::mpsc;
 
 pub struct App {
     pub ui_to_agent_tx: mpsc::Sender<UiToAgent>,
-    pub agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
     pub messages: Vec<String>,
     pub input: String,
     pub should_quit: bool,
@@ -26,7 +25,6 @@ impl App {
     pub async fn new(
         config: Config,
         ui_to_agent_tx: mpsc::Sender<UiToAgent>,
-        agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
     ) -> Result<Self> {
         // Create temporary agent to get tool count for status
         let agent = Agent::new(config.clone())?;
@@ -38,7 +36,6 @@ impl App {
 
         Ok(Self {
             ui_to_agent_tx,
-            agent_to_ui_rx,
             messages: Vec::new(),
             input: String::new(),
             should_quit: false,
@@ -85,36 +82,34 @@ impl App {
         self.token_usage.clone()
     }
 
-    /// Checks if the current background processing task has completed.
-    /// Returns true if a task was completed (successfully or with error).
-    /// If the task completed successfully, the result is stored in `pending_result`.
-    /// Polls for messages from agent thread and updates UI state.
-    /// Returns true if any messages were processed.
-    pub async fn poll_agent_messages(&mut self) -> bool {
-        let mut received = false;
-        while let Ok(msg) = self.agent_to_ui_rx.try_recv() {
-            received = true;
-            match msg {
-                AgentToUi::ToolCall(text) => {
-                    self.messages.push(text);
-                }
-                AgentToUi::ToolResult(text) => {
-                    self.messages.push(text);
-                }
-                AgentToUi::Response(text) => {
-                    self.messages.push(text);
-                    self.waiting_for_response = false;
-                }
-                AgentToUi::Error(text) => {
-                    self.messages.push(text);
-                    self.waiting_for_response = false;
-                }
-                AgentToUi::TokenUsage(usage) => {
-                    self.token_usage = usage;
-                }
+    /// Process a single agent message and update UI state.
+    /// Returns true if the message indicates the agent has finished processing
+    /// (i.e., a Response or Error), false otherwise.
+    pub fn handle_agent_message(&mut self, msg: AgentToUi) -> bool {
+        match msg {
+            AgentToUi::ToolCall(text) => {
+                self.messages.push(text);
+                false
+            }
+            AgentToUi::ToolResult(text) => {
+                self.messages.push(text);
+                false
+            }
+            AgentToUi::Response(text) => {
+                self.messages.push(text);
+                self.waiting_for_response = false;
+                true
+            }
+            AgentToUi::Error(text) => {
+                self.messages.push(text);
+                self.waiting_for_response = false;
+                true
+            }
+            AgentToUi::TokenUsage(usage) => {
+                self.token_usage = usage;
+                false
             }
         }
-        received
     }
 
     /// Cancels any ongoing background processing task.
