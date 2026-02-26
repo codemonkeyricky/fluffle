@@ -4,7 +4,6 @@ pub mod components;
 pub mod event;
 pub mod ui_trait;
 pub mod headless_backend;
-pub mod terminal_backend;
 pub mod render;
 pub mod history_cell;
 pub mod bottom_pane;
