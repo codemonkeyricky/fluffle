@@ -17,6 +17,7 @@
 
 # Worktrees
 .worktrees/
+.worktree/
 
 # OS
 .DS_Store
