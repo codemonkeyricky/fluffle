@@ -1,17 +1,5 @@
-use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
-use nanocode::error::Result;
-use nanocode::headless;
-use nanocode::ui::{App, Event, EventHandler};
-use nanocode::agent_thread::spawn;
-use nanocode::messaging::UiToAgent;
-use ratatui::{backend::CrosstermBackend, Terminal};
-use std::io;
+use nanocode::{create_ui, Config, Result};
 use structopt::StructOpt;
-use tokio::sync::mpsc;
 
 #[derive(StructOpt)]
 #[structopt(name = "nanocode")]
@@ -56,145 +44,11 @@ fn parse_args(args: std::env::Args) -> Args {
     Args { headless, prompt }
 }
 
-/// Guard that ensures terminal state is restored when dropped.
-struct TerminalGuard {
-    terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
-}
-
-impl TerminalGuard {
-    /// Setup terminal and return guard that will restore on drop.
-    fn setup() -> Result<Self> {
-        enable_raw_mode()?;
-
-        let mut stdout = io::stdout();
-        match execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
-            Ok(_) => {}
-            Err(e) => {
-                let _ = execute!(stdout, LeaveAlternateScreen, DisableMouseCapture);
-                let _ = disable_raw_mode();
-                return Err(e.into());
-            }
-        }
-
-        let backend = CrosstermBackend::new(stdout);
-
-        let terminal = match Terminal::new(backend) {
-            Ok(terminal) => terminal,
-            Err(e) => {
-                let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-                let _ = disable_raw_mode();
-                return Err(e.into());
-            }
-        };
-
-        Ok(Self {
-            terminal: Some(terminal),
-        })
-    }
-
-    fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<io::Stdout>> {
-        self.terminal.as_mut().expect("terminal should be present")
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        let _ = disable_raw_mode();
-        if let Some(terminal) = &mut self.terminal {
-            let _ = execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            );
-            let _ = terminal.show_cursor();
-        } else {
-            let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = parse_args(std::env::args());
-
-    if args.headless {
-        let config = nanocode::config::Config::load().await?;
-        headless::run(config, args.prompt).await
-    } else {
-        let mut guard = TerminalGuard::setup()?;
-        
-        // Load config
-        let config = nanocode::config::Config::load().await?;
-        
-        // Create channel for agent->UI updates
-        let (agent_to_ui_tx, mut agent_to_ui_rx) = mpsc::channel(100);
-        
-        // Spawn agent thread (returns sender for UI->agent requests)
-        let ui_to_agent_tx = spawn(config.clone(), agent_to_ui_tx);
-        let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
-        
-        // Create UI app with channels
-        let mut app = App::new(config, ui_to_agent_tx).await?;
-        let mut event_handler = EventHandler::new(250);
-
-        let result = async {
-            loop {
-                guard.terminal_mut().draw(|f| {
-                    nanocode::ui::components::render(f, &app);
-                })?;
-
-                tokio::select! {
-                    Some(event) = event_handler.next() => {
-                        match event {
-                            Event::Key(key) => match key.code {
-                                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                                    app.quit();
-                                }
-                                KeyCode::Enter => {
-                                    if !app.input.is_empty() {
-                                        let input = std::mem::take(&mut app.input);
-                                        app.messages.push(format!("> {}", input));
-                                        match ui_to_agent_tx_clone.try_send(UiToAgent::Request(input)) {
-                                            Ok(()) => {
-                                                app.pending_requests += 1;
-                                            }
-                                            Err(e) => {
-                                                app.messages.push(format!("Error queuing request: {}", e));
-                                            }
-                                        }
-                                    }
-                                }
-                                KeyCode::Char(c) => {
-                                    app.input.push(c);
-                                }
-                                KeyCode::Backspace => {
-                                    app.input.pop();
-                                }
-                                _ => {}
-                            },
-                            Event::Tick => {
-                                // Tick events can be used for periodic UI updates
-                            }
-                            Event::TaskCompleted => {}
-                        }
-                    }
-                    Some(msg) = agent_to_ui_rx.recv() => {
-                        app.handle_agent_message(msg);
-                    }
-                    else => break,
-                }
-
-                if app.should_quit {
-                    break;
-                }
-            }
-            Ok(())
-        }
-        .await;
-
-        // Send shutdown signal to agent thread
-        let _ = ui_to_agent_tx_clone.send(UiToAgent::Shutdown).await;
-        drop(guard);
-        result
-    }
+    let config = Config::load().await?;
+    
+    let mut ui = create_ui(config, args.headless, args.prompt).await?;
+    ui.run().await
 }

@@ -108,6 +108,10 @@ impl EventHandler {
     pub async fn next(&mut self) -> Option<Event> {
         self.rx.recv().await
     }
+
+    pub async fn send_task_completed(&self) -> Result<(), mpsc::error::SendError<Event>> {
+        self.tx.send(Event::TaskCompleted).await
+    }
 }
 
 impl Drop for EventHandler {
