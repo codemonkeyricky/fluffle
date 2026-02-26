@@ -264,6 +264,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({"path": "Cargo.toml"})).await;
@@ -278,6 +279,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: temp_dir.clone(),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         // Test writing a file
@@ -312,6 +314,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: temp_dir.clone(),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         // Test listing directory
@@ -366,6 +369,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: temp_dir,
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({"path": "nonexistent.txt"})).await;
@@ -383,6 +387,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: temp_dir,
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         // Missing path
@@ -409,6 +414,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: temp_dir,
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         // Attempt to traverse out of directory

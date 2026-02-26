@@ -133,6 +133,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({})).await;
@@ -146,6 +147,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({})).await;

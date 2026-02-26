@@ -94,6 +94,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({"command": "echo hello"})).await;
@@ -107,6 +108,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({})).await;
@@ -123,6 +125,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool.execute(&ctx, json!({"command": "false"})).await;
@@ -136,6 +139,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         // Command that writes to stderr but exits with success
@@ -152,6 +156,7 @@ mod tests {
         let ctx = ToolContext {
             working_directory: PathBuf::from("."),
             permissions: vec![],
+            agent_to_ui_tx: None,
         };
 
         let result = tool

@@ -16,7 +16,6 @@ pub struct Agent {
     context: ToolContext,
     ai_provider: Box<dyn AiProvider>,
     history: Vec<Message>,
-    agent_to_ui_tx: Option<mpsc::Sender<AgentToUi>>,
     ui_to_agent_rx: Option<mpsc::Receiver<UiToAgent>>,
     system_prompt: Option<String>,
     token_usage: TokenUsage,
@@ -31,6 +30,7 @@ impl Agent {
         let context = crate::types::ToolContext {
             working_directory: std::env::current_dir().map_err(|e| crate::error::Error::Io(e))?,
             permissions: Vec::new(),
+            agent_to_ui_tx: None,
         };
 
         // Create AI provider based on configuration
@@ -42,7 +42,6 @@ impl Agent {
             context,
             ai_provider,
             history: Vec::new(),
-            agent_to_ui_tx: None,
             ui_to_agent_rx: None,
             system_prompt: None,
             token_usage: TokenUsage::default(),
@@ -55,7 +54,7 @@ impl Agent {
         ui_to_agent_rx: mpsc::Receiver<UiToAgent>,
     ) -> Result<Self> {
         let mut agent = Self::new(config)?;
-        agent.agent_to_ui_tx = Some(agent_to_ui_tx);
+        agent.context.agent_to_ui_tx = Some(agent_to_ui_tx);
         agent.ui_to_agent_rx = Some(ui_to_agent_rx);
         Ok(agent)
     }
@@ -183,7 +182,7 @@ impl Agent {
     }
 
     pub fn set_agent_to_ui_tx(&mut self, tx: mpsc::Sender<AgentToUi>) {
-        self.agent_to_ui_tx = Some(tx);
+        self.context.agent_to_ui_tx = Some(tx);
     }
 
     pub fn set_ui_to_agent_rx(&mut self, rx: mpsc::Receiver<UiToAgent>) {
@@ -216,7 +215,7 @@ impl Agent {
         if self.ui_to_agent_rx.is_none() {
             return Err(crate::error::Error::Agent("ui_to_agent_rx not set".to_string()));
         }
-        if self.agent_to_ui_tx.is_none() {
+        if self.context.agent_to_ui_tx.is_none() {
             return Err(crate::error::Error::Agent("agent_to_ui_tx not set".to_string()));
         }
 
@@ -229,11 +228,11 @@ impl Agent {
                 UiToAgent::Request(input) => {
                     match self.process(&input).await {
                         Ok(response) => {
-                            let _ = self.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Response(response)).await;
-                            let _ = self.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::TokenUsage(self.token_usage().clone())).await;
+                            let _ = self.context.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Response(response)).await;
+                            let _ = self.context.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::TokenUsage(self.token_usage().clone())).await;
                         }
                         Err(e) => {
-                            let _ = self.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Error(e.to_string())).await;
+                            let _ = self.context.agent_to_ui_tx.as_ref().unwrap().send(AgentToUi::Error(e.to_string())).await;
                         }
                     }
                 }
@@ -264,7 +263,6 @@ impl Agent {
             context: self.context.clone(),
             ai_provider,
             history,
-            agent_to_ui_tx: None,
             ui_to_agent_rx: None,
             system_prompt,
             token_usage: TokenUsage::default(),
@@ -277,13 +275,16 @@ impl Agent {
         // Create new AI provider with same configuration
         let ai_provider = create_provider(&self.config.provider, self.config.api_key.as_deref())?;
 
+        // Propagate agent_to_ui_tx from parent context
+        let mut context = context;
+        context.agent_to_ui_tx = self.context.agent_to_ui_tx.clone();
+
         Ok(Self {
             config: self.config.clone(),
             tools: self.tools.clone(),
             context,
             ai_provider,
             history: Vec::new(),
-            agent_to_ui_tx: None,
             ui_to_agent_rx: None,
             system_prompt: None,
             token_usage: TokenUsage::default(),
@@ -456,7 +457,7 @@ impl Agent {
 
     /// Helper to push tool call message to shared messages
     async fn push_tool_call(&self, name: &str, arguments: &serde_json::Value) {
-        if let Some(tx) = &self.agent_to_ui_tx {
+        if let Some(tx) = &self.context.agent_to_ui_tx {
             let args_str =
                 serde_json::to_string_pretty(arguments).unwrap_or_else(|_| "{}".to_string());
             let msg = format!("Tool: {}({})", name, args_str);
@@ -466,7 +467,7 @@ impl Agent {
 
     /// Helper to push tool result message to UI channel
     async fn push_tool_result(&self, success: bool, output: &str) {
-        if let Some(tx) = &self.agent_to_ui_tx {
+        if let Some(tx) = &self.context.agent_to_ui_tx {
             let prefix = if success { "Result:" } else { "Error:" };
             let msg = format!("{} {}", prefix, output);
             let message = if success {

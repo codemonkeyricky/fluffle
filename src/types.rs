@@ -1,9 +1,12 @@
+use crate::messaging::AgentToUi;
 use serde_json::Value;
+use tokio::sync::mpsc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ToolContext {
     pub working_directory: std::path::PathBuf,
     pub permissions: Vec<String>,
+    pub agent_to_ui_tx: Option<mpsc::Sender<AgentToUi>>,
 }
 
 #[derive(Debug)]
