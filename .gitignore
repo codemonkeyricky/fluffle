@@ -32,3 +32,6 @@ Thumbs.db
 # Local test files
 test_output.txt
 test_env/
+
+# Refactoring directories
+ui-refactor/
