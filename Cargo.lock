@@ -1224,6 +1224,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "inventory",
+ "lazy_static",
  "ratatui",
  "serde",
  "serde_json",

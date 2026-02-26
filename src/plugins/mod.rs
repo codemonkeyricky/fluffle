@@ -1,8 +1,10 @@
+mod agent_profile;
 mod bash_exec;
 mod explore;
 mod file_ops;
 mod git_ops;
 mod task;
+pub use agent_profile::AgentProfilePlugin;
 pub use bash_exec::BashExecPlugin;
 pub use explore::ExplorePlugin;
 pub use file_ops::FileOpsPlugin;

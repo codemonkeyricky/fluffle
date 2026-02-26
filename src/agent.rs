@@ -1,8 +1,12 @@
+use crate::agent_profile::AgentProfile;
 use crate::ai::{create_provider, AiProvider, Message, TokenUsage, ToolCall, ToolDefinition};
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
+use crate::profile_loader;
 use crate::types::{ToolContext, ToolResult};
+use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -56,8 +60,118 @@ impl Agent {
         Ok(agent)
     }
 
+    /// Create agent with a specific profile
+    pub fn new_with_profile(profile_name: &str, config: Config) -> Result<Self> {
+        let profile = profile_loader::get_profile(profile_name)
+            .ok_or_else(|| crate::error::Error::Agent(format!("Profile not found: {}", profile_name)))?;
+        
+        // Create base agent
+        let mut agent = Self::new(config)?;
+        
+        // Apply profile configuration
+        agent.apply_profile(&profile)?;
+        
+        Ok(agent)
+    }
+
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    pub fn system_prompt(&self) -> Option<&str> {
+        self.system_prompt.as_deref()
+    }
+
+    /// Apply profile settings to existing agent
+    fn apply_profile(&mut self, profile: &AgentProfile) -> Result<()> {
+        // Filter tools based on profile whitelist
+        self.filter_tools(&profile.tools)?;
+
+        // Set system prompt
+        self.system_prompt = Some(profile.system_prompt.clone());
+
+        // Apply config overrides
+        self.apply_config_overrides(&profile.config_overrides)?;
+
+        Ok(())
+    }
+
+    /// Filter tools to only include those in the whitelist
+    fn filter_tools(&mut self, tool_names: &[String]) -> Result<()> {
+        let available_tools: HashMap<String, Arc<dyn crate::plugin::Tool>> = self.tools.iter()
+            .map(|t| (t.name().to_string(), t.clone()))
+            .collect();
+        
+        let mut filtered = Vec::new();
+        for name in tool_names {
+            if let Some(tool) = available_tools.get(name) {
+                filtered.push(tool.clone());
+            } else {
+                // Check if it's a profile tool
+                if profile_loader::has_profile(name) {
+                    // Profile tools are handled separately by the profile plugin
+                    // They'll be available through their own tool registration
+                    continue;
+                }
+                // Return error for unknown tools
+                return Err(crate::error::Error::Agent(format!("Unknown tool in profile: {}", name)));
+            }
+        }
+        
+        self.tools = filtered;
+        Ok(())
+    }
+
+    /// Apply configuration overrides from profile
+    fn apply_config_overrides(&mut self, overrides: &std::collections::HashMap<String, serde_json::Value>) -> Result<()> {
+        use serde_json::Value;
+        
+        for (key, value) in overrides {
+            match key.as_str() {
+                "temperature" => {
+                    if let Value::Number(num) = value {
+                        if let Some(temp) = num.as_f64() {
+                            self.config.temperature = temp as f32;
+                        }
+                    }
+                }
+                "max_tokens" => {
+                    if let Value::Number(num) = value {
+                        if let Some(tokens) = num.as_u64() {
+                            self.config.max_tokens = tokens as u32;
+                        }
+                    }
+                }
+                "max_tool_iterations" => {
+                    if let Value::Number(num) = value {
+                        if let Some(iter) = num.as_u64() {
+                            self.config.max_tool_iterations = iter as u32;
+                        }
+                    }
+                }
+                "model" => {
+                    if let Value::String(model) = value {
+                        self.config.model = model.clone();
+                    }
+                }
+                "provider" => {
+                    if let Value::String(provider) = value {
+                        self.config.provider = provider.clone();
+                    }
+                }
+                "api_key" => {
+                    match value {
+                        Value::String(key) => self.config.api_key = Some(key.clone()),
+                        Value::Null => self.config.api_key = None,
+                        _ => {}
+                    }
+                }
+                _ => {
+                    tracing::warn!("Unknown config override key: {}", key);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn token_usage(&self) -> &TokenUsage {
@@ -182,10 +296,7 @@ impl Agent {
         self.context = context;
     }
 
-    /// Get the system prompt, if any.
-    pub fn system_prompt(&self) -> Option<&str> {
-        self.system_prompt.as_deref()
-    }
+
 
     /// Discover all tools registered via the plugin inventory.
     /// This method scans the compile-time plugin registry and collects
@@ -544,5 +655,53 @@ mod tests {
         let first_msg = &subagent.history()[0];
         assert!(matches!(first_msg.role, crate::ai::MessageRole::User));
         assert!(first_msg.content.contains("helpful assistant"));
+    }
+
+    #[test]
+    fn test_agent_new_with_profile() {
+        use crate::profile_loader;
+        // Ensure profiles are loaded
+        profile_loader::clear_profiles();
+        profile_loader::load_profiles().expect("Failed to load profiles");
+
+        let config = Config {
+            model: "gpt-4".to_string(),
+            api_key: None,
+            provider: "openai".to_string(),
+            max_tokens: 4096,
+            temperature: 0.7,
+            max_tool_iterations: 10,
+        };
+
+        // Create agent with explorer profile
+        let agent = Agent::new_with_profile("explorer", config.clone())
+            .expect("Failed to create agent with profile");
+
+        // Should have filtered tools (only those listed in explorer profile)
+        let tool_names: Vec<&str> = agent.tools().iter().map(|t| t.name()).collect();
+        // explorer profile includes file_read, file_list, bash_exec, git_status, git_diff
+        assert!(tool_names.contains(&"file_read"));
+        assert!(tool_names.contains(&"file_list"));
+        assert!(tool_names.contains(&"bash_exec"));
+        assert!(tool_names.contains(&"git_status"));
+        assert!(tool_names.contains(&"git_diff"));
+        // Should NOT have other tools like file_write, task, explore
+        assert!(!tool_names.contains(&"file_write"));
+        assert!(!tool_names.contains(&"task"));
+        assert!(!tool_names.contains(&"explore"));
+
+        // System prompt should be set
+        assert!(agent.system_prompt().is_some());
+        let prompt = agent.system_prompt().unwrap();
+        assert!(prompt.contains("codebase explorer"));
+
+        // Config overrides should be applied (temperature 0.2, max_tool_iterations 30)
+        let agent_config = agent.config();
+        assert_eq!(agent_config.temperature, 0.2);
+        assert_eq!(agent_config.max_tool_iterations, 30);
+        // Other config unchanged
+        assert_eq!(agent_config.model, config.model);
+        assert_eq!(agent_config.max_tokens, config.max_tokens);
+        assert_eq!(agent_config.provider, config.provider);
     }
 }

@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::plugin::{Plugin, Tool};
+use crate::profile_loader;
 use crate::types::{ToolContext, ToolParameters, ToolResult};
 use async_trait::async_trait;
 use serde_json::json;
@@ -71,25 +72,42 @@ impl Tool for ExploreTool {
             Err(e) => return ToolResult::error(format!("Failed to load config: {}", e)),
         };
 
-        // Create base agent
-        let mut agent = match crate::Agent::new(config) {
-            Ok(agent) => agent,
-            Err(e) => return ToolResult::error(format!("Failed to create agent: {}", e)),
-        };
+        // Try to use explorer profile if available
+        if let Some(profile) = profile_loader::get_profile("explorer") {
+            // Create agent with explorer profile
+            let mut agent = match crate::Agent::new_with_profile("explorer", config) {
+                Ok(agent) => agent,
+                Err(e) => return ToolResult::error(format!("Failed to create agent with profile: {}", e)),
+            };
+            // Set working directory from parent context
+            agent.set_context(ctx.clone());
+            // Run the exploration task
+            match agent.process(description).await {
+                Ok(summary) => ToolResult::success(summary),
+                Err(e) => ToolResult::error(format!("Explore subagent failed: {}", e)),
+            }
+        } else {
+            // Fallback to legacy behavior
+            // Create base agent
+            let mut agent = match crate::Agent::new(config) {
+                Ok(agent) => agent,
+                Err(e) => return ToolResult::error(format!("Failed to create agent: {}", e)),
+            };
 
-        // Set working directory from parent context
-        agent.set_context(ctx.clone());
+            // Set working directory from parent context
+            agent.set_context(ctx.clone());
 
-        // Set explore system prompt
-        match agent.with_system_prompt(Some(DEFAULT_EXPLORE_PROMPT.to_string())) {
-            Ok(subagent) => agent = subagent,
-            Err(e) => return ToolResult::error(format!("Failed to set system prompt: {}", e)),
-        }
+            // Set explore system prompt
+            match agent.with_system_prompt(Some(DEFAULT_EXPLORE_PROMPT.to_string())) {
+                Ok(subagent) => agent = subagent,
+                Err(e) => return ToolResult::error(format!("Failed to set system prompt: {}", e)),
+            }
 
-        // Run the exploration task
-        match agent.process(description).await {
-            Ok(summary) => ToolResult::success(summary),
-            Err(e) => ToolResult::error(format!("Explore subagent failed: {}", e)),
+            // Run the exploration task
+            match agent.process(description).await {
+                Ok(summary) => ToolResult::success(summary),
+                Err(e) => ToolResult::error(format!("Explore subagent failed: {}", e)),
+            }
         }
     }
 }

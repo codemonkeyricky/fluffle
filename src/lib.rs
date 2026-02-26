@@ -17,7 +17,9 @@
 //! For more details, see the individual modules.
 
 pub mod agent;
+pub mod agent_profile;
 pub mod agent_thread;
+pub mod profile_loader;
 pub mod ai;
 pub mod config;
 pub mod error;

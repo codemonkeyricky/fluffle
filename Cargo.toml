@@ -22,6 +22,7 @@ async-trait = "0.1"
 futures = "0.3"
 dirs = "5.0"
 structopt = "0.3"
+lazy_static = "1.4"
 
 [dev-dependencies]
 tokio-test = "0.4"
