@@ -48,6 +48,20 @@ impl Agent {
         })
     }
 
+    /// Tool names whose successful results should be suppressed (tool calls still printed)
+    pub(crate) const SUPPRESSED_TOOLS: &'static [&'static str] = &[
+        "file_read",
+        "file_write",
+        "file_list",
+        "bash_exec",
+        "list_files",
+        "glob",
+        "grep",
+        "read",
+        "write",
+        "ls",
+    ];
+
     pub fn new_with_channels(
         config: Config,
         agent_to_ui_tx: mpsc::Sender<AgentToUi>,
@@ -441,8 +455,9 @@ impl Agent {
             }
 
             // Push tool result messages to UI
-            for (_tool_call, result) in &tool_results {
+            for (tool_call, result) in &tool_results {
                 self.push_tool_result(
+                    &tool_call.name,
                     result.is_success(),
                     if result.is_success() {
                         result.output()
@@ -493,7 +508,12 @@ impl Agent {
     }
 
     /// Helper to push tool result message to UI channel
-    async fn push_tool_result(&self, success: bool, output: &str) {
+    async fn push_tool_result(&self, tool_name: &str, success: bool, output: &str) {
+        // Suppress successful results for certain tools to reduce noise
+        // Errors are always shown
+        if success && self.should_suppress_result(tool_name) {
+            return;
+        }
         if let Some(tx) = &self.context.agent_to_ui_tx {
             let prefix = if success { "Result:" } else { "Error:" };
             let msg = format!("{} {}", prefix, output);
@@ -504,6 +524,19 @@ impl Agent {
             };
             let _ = tx.send(message).await;
         }
+    }
+
+    /// Determine whether to suppress tool results for a given tool name
+    fn should_suppress_result(&self, tool_name: &str) -> bool {
+        // Check exact matches
+        if Self::SUPPRESSED_TOOLS.contains(&tool_name) {
+            return true;
+        }
+        // Suppress all file_* tools
+        if tool_name.starts_with("file_") {
+            return true;
+        }
+        false
     }
 
     /// Convert the agent's tools to AI tool definitions.
@@ -727,5 +760,20 @@ mod tests {
         assert_eq!(agent_config.model, config.model);
         assert_eq!(agent_config.max_tokens, config.max_tokens);
         assert_eq!(agent_config.provider, config.provider);
+    }
+
+    #[test]
+    fn test_suppressed_tools_list() {
+        use super::Agent;
+        // Verify that known noisy tools are in the list
+        let suppressed = Agent::SUPPRESSED_TOOLS;
+        assert!(suppressed.contains(&"file_read"));
+        assert!(suppressed.contains(&"file_write"));
+        assert!(suppressed.contains(&"file_list"));
+        assert!(suppressed.contains(&"bash_exec"));
+        assert!(suppressed.contains(&"list_files"));
+        // Verify that important agent tools are NOT suppressed
+        assert!(!suppressed.contains(&"task"));
+        assert!(!suppressed.contains(&"explore"));
     }
 }
