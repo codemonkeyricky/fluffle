@@ -87,10 +87,10 @@ impl Ui for HeadlessUi {
         while let Some(msg) = self.recv_from_agent().await {
             match msg {
                 AgentToUi::ToolCall(text) => {
-                    println!("{}", text);
+                    println!("\x1b[90m{}\x1b[0m", text);
                 }
                 AgentToUi::ToolResult(text) => {
-                    println!("{}", text);
+                    println!("\x1b[90m{}\x1b[0m", text);
                 }
                 AgentToUi::Response(text) => {
                     final_response = Some(text);

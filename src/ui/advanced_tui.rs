@@ -107,12 +107,8 @@ impl ChatWidget {
     /// Convert an agent message to a history cell.
     fn cell_from_agent_message(&self, msg: AgentToUi) -> Box<dyn HistoryCell> {
         match msg {
-            AgentToUi::ToolCall(text) => {
-                Box::new(PlainHistoryCell::new(format!("Tool call: {}", text)))
-            }
-            AgentToUi::ToolResult(text) => {
-                Box::new(PlainHistoryCell::new(format!("Tool result: {}", text)))
-            }
+            AgentToUi::ToolCall(text) => Box::new(PlainHistoryCell::new(text)),
+            AgentToUi::ToolResult(text) => Box::new(PlainHistoryCell::new(text)),
             AgentToUi::Response(text) => Box::new(AgentMessageCell::new(text)),
             AgentToUi::Error(text) => Box::new(PlainHistoryCell::new(format!("Error: {}", text))),
             AgentToUi::TokenUsage(usage) => {

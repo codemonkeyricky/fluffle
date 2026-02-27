@@ -146,7 +146,7 @@ impl Agent {
         &mut self,
         overrides: &std::collections::HashMap<String, serde_json::Value>,
     ) -> Result<()> {
-        use serde_json::Value;
+
 
         for (key, value) in overrides {
             match key.as_str() {
@@ -502,9 +502,8 @@ impl Agent {
     /// Helper to push tool call message to shared messages
     async fn push_tool_call(&self, name: &str, arguments: &serde_json::Value) {
         if let Some(tx) = &self.context.agent_to_ui_tx {
-            let args_str =
-                serde_json::to_string_pretty(arguments).unwrap_or_else(|_| "{}".to_string());
-            let msg = format!("Tool: {}({})", name, args_str);
+            let args_str = serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string());
+            let msg = format!("Tool -> {}: {}", name, args_str);
             let _ = tx.send(AgentToUi::ToolCall(msg)).await;
         }
     }
