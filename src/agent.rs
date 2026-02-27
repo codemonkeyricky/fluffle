@@ -382,6 +382,8 @@ impl Agent {
     pub async fn process(&mut self, user_message: &str) -> Result<String> {
         // Add user message to conversation history
         self.history.push(Message::user(user_message));
+        // Reset token usage for this request
+        self.token_usage = TokenUsage::default();
 
         let mut iteration = 0;
 
@@ -400,16 +402,16 @@ impl Agent {
                 .complete_with_tools(&self.history, &tool_definitions)
                 .await?;
 
-            // Accumulate token usage
+            // Record token usage for this request
             if let Some(usage) = ai_response.token_usage {
                 self.log_to_agent_file("=== TOKEN USAGE ===");
                 self.log_to_agent_file(&format!(
-                    "Prompt tokens: {}, Completion tokens: {}, Total tokens: {}",
+                    "Current API call: prompt: {}, completion: {}, total: {}",
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                 ));
                 self.token_usage += usage.clone();
                 self.log_to_agent_file(&format!(
-                    "Cumulative: prompt: {}, completion: {}, total: {}",
+                    "Request total: prompt: {}, completion: {}, total: {}",
                     self.token_usage.prompt_tokens,
                     self.token_usage.completion_tokens,
                     self.token_usage.total_tokens
