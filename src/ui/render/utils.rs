@@ -1,4 +1,4 @@
-use ratatui::{buffer::Buffer, layout::Rect, text::Line};
+use ratatui::{buffer::Buffer, layout::Rect, style::Style, text::Line};
 
 use super::Renderable;
 
