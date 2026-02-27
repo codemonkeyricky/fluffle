@@ -79,6 +79,8 @@ impl Drop for TerminalGuard {
 struct ChatWidget {
     history_cells: Vec<Box<dyn HistoryCell>>,
     active_cell: Option<Box<dyn HistoryCell>>,
+    scroll_offset: usize,
+    auto_scroll: bool,
 }
 
 impl ChatWidget {
@@ -86,6 +88,8 @@ impl ChatWidget {
         Self {
             history_cells: Vec::new(),
             active_cell: None,
+            scroll_offset: 0,
+            auto_scroll: true,
         }
     }
 
@@ -113,6 +117,59 @@ impl ChatWidget {
             AgentToUi::Error(text) => Box::new(PlainHistoryCell::new(format!("Error: {}", text))),
             AgentToUi::TokenUsage(usage) => {
                 Box::new(PlainHistoryCell::new(format!("Token usage: {:?}", usage)))
+            }
+            AgentToUi::Thinking(text) => {
+                Box::new(PlainHistoryCell::new(format!("Thinking: {}", text)))
+            }
+        }
+    }
+
+    /// Adjust scroll offset by delta (positive = scroll down toward newer, negative = scroll up toward older).
+    fn scroll_by(&mut self, delta: isize) {
+        let new_offset = self.scroll_offset as isize + delta;
+        self.scroll_offset = new_offset.max(0) as usize;
+        // Clamp to max possible offset (cannot scroll past last cell)
+        // The actual clamping depends on viewport height; we'll clamp later in render.
+        // For now, just ensure it doesn't exceed cell count.
+        let max_offset = self.history_cells.len().saturating_sub(1);
+        if self.scroll_offset > max_offset {
+            self.scroll_offset = max_offset;
+        }
+        // When user scrolls manually, disable auto-scroll
+        self.auto_scroll = false;
+    }
+
+    /// Scroll to bottom (show newest cells).
+    fn scroll_to_bottom(&mut self) {
+        self.auto_scroll = true;
+    }
+
+    /// Scroll to top (show oldest cells).
+    fn scroll_to_top(&mut self) {
+        self.scroll_offset = 0;
+        self.auto_scroll = false;
+    }
+
+    /// Update scroll offset based on viewport height and cell heights.
+    /// Called from render to ensure offset is valid.
+    fn clamp_scroll_offset(&mut self, viewport_height: u16, cell_heights: &[u16]) {
+        if self.auto_scroll {
+            // Compute start_index as the oldest cell that fits when showing newest cells
+            let mut history_height = 0;
+            let mut start_index = self.history_cells.len();
+            for (i, &height) in cell_heights.iter().enumerate().rev() {
+                if history_height + height > viewport_height {
+                    break;
+                }
+                history_height += height;
+                start_index = i;
+            }
+            self.scroll_offset = start_index;
+        } else {
+            // Ensure scroll_offset is within bounds
+            let max_offset = self.history_cells.len().saturating_sub(1);
+            if self.scroll_offset > max_offset {
+                self.scroll_offset = max_offset;
             }
         }
     }
@@ -155,27 +212,23 @@ impl Renderable for ChatWidget {
             remaining_height -= active_height.unwrap();
         }
 
-        // Select history cells from newest to oldest until remaining_height exhausted
+        // Update scroll offset based on remaining height and cell heights
+        self.clamp_scroll_offset(remaining_height, &cell_heights);
+
+        // Determine which history cells to render (starting from scroll_offset)
         let mut history_height = 0;
-        let mut start_index = self.history_cells.len(); // index of first cell to render (inclusive)
-        for (i, &height) in cell_heights.iter().enumerate().rev() {
+        let mut end_index = self.scroll_offset; // exclusive
+        for (i, &height) in cell_heights.iter().enumerate().skip(self.scroll_offset) {
             if history_height + height > remaining_height {
                 break;
             }
             history_height += height;
-            start_index = i;
+            end_index = i + 1;
         }
 
-        let total_height = history_height
-            + if include_active {
-                active_height.unwrap()
-            } else {
-                0
-            };
-
-        // Render selected history cells
-        let mut y = area.y + available_height - total_height; // align to bottom
-        for i in start_index..self.history_cells.len() {
+        // Render history cells top-down
+        let mut y = area.y;
+        for i in self.scroll_offset..end_index {
             let cell = &self.history_cells[i];
             let mut renderable = cell.as_renderable(width);
             let height = cell_heights[i];
@@ -184,7 +237,7 @@ impl Renderable for ChatWidget {
             y += height;
         }
 
-        // Render active cell if included
+        // Render active cell below history cells if it fits
         if include_active {
             if let Some(active) = &self.active_cell {
                 let mut renderable = active.as_renderable(width);
@@ -192,10 +245,11 @@ impl Renderable for ChatWidget {
                 if y + height <= max_y {
                     let rect = Rect::new(area.x, y, width, height);
                     renderable.render(rect, buf);
-                }
-            }
-        }
-    }
+                                         }
+                                     }
+                                 }
+                             }
+
 }
 
 /// Advanced terminal UI backend using the Codex‑style layout.
@@ -370,6 +424,24 @@ impl Ui for AdvancedTerminalUi {
                                 if let Some(composer) = self.bottom_pane.active_composer_mut() {
                                     composer.input_mut().pop();
                                 }
+                            }
+                            KeyCode::Up => {
+                                self.chat_widget.scroll_by(-1);
+                            }
+                            KeyCode::Down => {
+                                self.chat_widget.scroll_by(1);
+                            }
+                            KeyCode::PageUp => {
+                                self.chat_widget.scroll_by(-5);
+                            }
+                            KeyCode::PageDown => {
+                                self.chat_widget.scroll_by(5);
+                            }
+                            KeyCode::Home => {
+                                self.chat_widget.scroll_to_top();
+                            }
+                            KeyCode::End => {
+                                self.chat_widget.scroll_to_bottom();
                             }
                             _ => {}
                         },

@@ -85,12 +85,16 @@ impl Ui for HeadlessUi {
         // Collect and print responses
         let mut final_response = None;
         while let Some(msg) = self.recv_from_agent().await {
+            tracing::debug!("Headless UI received message: {:?}", msg);
             match msg {
                 AgentToUi::ToolCall(text) => {
                     println!("\x1b[90m{}\x1b[0m", text);
                 }
                 AgentToUi::ToolResult(text) => {
                     println!("\x1b[90m{}\x1b[0m", text);
+                }
+                AgentToUi::Thinking(text) => {
+                    println!("\x1b[90mThinking: {}\x1b[0m", text);
                 }
                 AgentToUi::Response(text) => {
                     final_response = Some(text);

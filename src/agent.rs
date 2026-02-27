@@ -146,8 +146,6 @@ impl Agent {
         &mut self,
         overrides: &std::collections::HashMap<String, serde_json::Value>,
     ) -> Result<()> {
-
-
         for (key, value) in overrides {
             match key.as_str() {
                 "temperature" => {
@@ -252,29 +250,26 @@ impl Agent {
             match request {
                 UiToAgent::Request(input) => match self.process(&input).await {
                     Ok(response) => {
-                        let _ = self
-                            .context
-                            .agent_to_ui_tx
-                            .as_ref()
-                            .unwrap()
-                            .send(AgentToUi::Response(response))
-                            .await;
-                        let _ = self
-                            .context
-                            .agent_to_ui_tx
-                            .as_ref()
-                            .unwrap()
-                            .send(AgentToUi::TokenUsage(self.token_usage().clone()))
-                            .await;
+                        tracing::debug!("Sending response: {}", response);
+                        if let Some(tx) = &self.context.agent_to_ui_tx {
+                            if let Err(e) = tx.send(AgentToUi::Response(response)).await {
+                                tracing::error!("Failed to send response to UI: {}", e);
+                            }
+                            if let Err(e) = tx
+                                .send(AgentToUi::TokenUsage(self.token_usage().clone()))
+                                .await
+                            {
+                                tracing::error!("Failed to send token usage to UI: {}", e);
+                            }
+                        }
                     }
                     Err(e) => {
-                        let _ = self
-                            .context
-                            .agent_to_ui_tx
-                            .as_ref()
-                            .unwrap()
-                            .send(AgentToUi::Error(e.to_string()))
-                            .await;
+                        tracing::debug!("Sending error: {}", e);
+                        if let Some(tx) = &self.context.agent_to_ui_tx {
+                            if let Err(e) = tx.send(AgentToUi::Error(e.to_string())).await {
+                                tracing::error!("Failed to send error to UI: {}", e);
+                            }
+                        }
                     }
                 },
                 UiToAgent::Shutdown => {
@@ -417,6 +412,9 @@ impl Agent {
                     self.token_usage.total_tokens
                 ));
             }
+            self.log_to_agent_file("=== MODEL RESPONSE ===");
+            self.log_to_agent_file(&format!("Content: {}", ai_response.content));
+            self.log_to_agent_file(&format!("Tool calls: {}", ai_response.tool_calls.len()));
 
             // Check if we have a final response (no tool calls)
             if ai_response.tool_calls.is_empty() {
@@ -429,6 +427,11 @@ impl Agent {
                 &ai_response.content,
                 ai_response.tool_calls.clone(),
             ));
+
+            // Push thinking output to UI if content is not empty
+            if !ai_response.content.trim().is_empty() {
+                self.push_thinking(&ai_response.content).await;
+            }
 
             // Push tool call messages to UI
             for tool_call in &ai_response.tool_calls {
@@ -504,7 +507,10 @@ impl Agent {
         if let Some(tx) = &self.context.agent_to_ui_tx {
             let args_str = serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string());
             let msg = format!("Tool -> {}: {}", name, args_str);
-            let _ = tx.send(AgentToUi::ToolCall(msg)).await;
+            tracing::debug!("Pushing tool call: {}", msg);
+            if let Err(e) = tx.send(AgentToUi::ToolCall(msg)).await {
+                tracing::error!("Failed to send tool call to UI: {}", e);
+            }
         }
     }
 
@@ -513,17 +519,31 @@ impl Agent {
         // Suppress successful results for certain tools to reduce noise
         // Errors are always shown
         if success && self.should_suppress_result(tool_name) {
+            tracing::debug!("Suppressing tool result for {}", tool_name);
             return;
         }
         if let Some(tx) = &self.context.agent_to_ui_tx {
             let prefix = if success { "Result:" } else { "Error:" };
             let msg = format!("{} {}", prefix, output);
+            tracing::debug!("Pushing tool result: {}", msg);
             let message = if success {
                 AgentToUi::ToolResult(msg)
             } else {
                 AgentToUi::Error(msg)
             };
-            let _ = tx.send(message).await;
+            if let Err(e) = tx.send(message).await {
+                tracing::error!("Failed to send tool result to UI: {}", e);
+            }
+        }
+    }
+
+    /// Helper to push thinking/reasoning output to UI channel
+    async fn push_thinking(&self, content: &str) {
+        if let Some(tx) = &self.context.agent_to_ui_tx {
+            tracing::debug!("Pushing thinking: {}", content);
+            if let Err(e) = tx.send(AgentToUi::Thinking(content.to_string())).await {
+                tracing::error!("Failed to send thinking to UI: {}", e);
+            }
         }
     }
 

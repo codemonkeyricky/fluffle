@@ -27,4 +27,6 @@ pub enum AgentToUi {
     Error(String),
     /// Token usage statistics.
     TokenUsage(TokenUsage),
+    /// Thinking/reasoning output from agent.
+    Thinking(String),
 }

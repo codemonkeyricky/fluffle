@@ -87,6 +87,10 @@ impl App {
                 self.messages.push(text);
                 false
             }
+            AgentToUi::Thinking(text) => {
+                self.messages.push(text);
+                false
+            }
             AgentToUi::Response(text) => {
                 self.messages.push(text);
                 self.pending_requests = self.pending_requests.saturating_sub(1);
