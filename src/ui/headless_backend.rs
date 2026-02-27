@@ -7,7 +7,7 @@ use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access to tools. Use tools to accomplish tasks when appropriate. When the user asks to explore or analyze a codebase, use the explore tool.";
+const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access to tools. Use tools to accomplish tasks when appropriate. When the user asks to explore or analyze a codebase, use the explorer tool.";
 
 /// Headless UI backend that prints to stdout.
 pub struct HeadlessUi {

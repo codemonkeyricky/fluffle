@@ -10,6 +10,6 @@
     "git_status",
     "git_diff",
     "task",
-    "explore"
+    "explorer"
   ]
 }

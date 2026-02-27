@@ -1,14 +1,12 @@
 mod agent_profile;
 mod bash_exec;
 mod dynamic_tools;
-mod explore;
 mod file_ops;
 mod git_ops;
 mod task;
 pub use agent_profile::AgentProfilePlugin;
 pub use bash_exec::BashExecPlugin;
 pub use dynamic_tools::DynamicToolsPlugin;
-pub use explore::ExplorePlugin;
 pub use file_ops::FileOpsPlugin;
 pub use git_ops::GitOpsPlugin;
 pub use task::TaskPlugin;

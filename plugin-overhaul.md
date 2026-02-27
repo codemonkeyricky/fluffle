@@ -215,7 +215,7 @@ Create `src/agent_profiles/generalist.json`:
     "bash_exec", 
     "git_ops",
     "task",
-    "explore"
+    "explorer"
   ]
 }
 ```

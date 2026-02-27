@@ -681,9 +681,9 @@ mod tests {
         let agent = Agent::new(config).expect("Agent initialization failed");
         let tool_names: Vec<&str> = agent.tools().iter().map(|t| t.name()).collect();
 
-        // Should have at least file_ops, bash_exec, git_ops, task, explore
+        // Should have at least file_ops, bash_exec, git_ops, task, explorer
         assert!(tool_names.contains(&"task"), "Missing 'task' tool");
-        assert!(tool_names.contains(&"explore"), "Missing 'explore' tool");
+        assert!(tool_names.contains(&"explorer"), "Missing 'explorer' tool");
     }
 
     #[test]
@@ -742,10 +742,10 @@ mod tests {
         assert!(tool_names.contains(&"bash_exec"));
         assert!(tool_names.contains(&"git_status"));
         assert!(tool_names.contains(&"git_diff"));
-        // Should NOT have other tools like file_write, task, explore
+        // Should NOT have other tools like file_write, task, explorer
         assert!(!tool_names.contains(&"file_write"));
         assert!(!tool_names.contains(&"task"));
-        assert!(!tool_names.contains(&"explore"));
+        assert!(!tool_names.contains(&"explorer"));
 
         // System prompt should be set
         assert!(agent.system_prompt().is_some());
@@ -774,6 +774,6 @@ mod tests {
         assert!(suppressed.contains(&"list_files"));
         // Verify that important agent tools are NOT suppressed
         assert!(!suppressed.contains(&"task"));
-        assert!(!suppressed.contains(&"explore"));
+        assert!(!suppressed.contains(&"explorer"));
     }
 }
