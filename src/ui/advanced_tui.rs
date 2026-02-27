@@ -135,27 +135,68 @@ impl Renderable for ChatWidget {
     }
 
     fn render(&mut self, area: Rect, buf: &mut Buffer) {
-        let mut y = area.y;
         let width = area.width;
         let max_y = area.y + area.height;
+        let available_height = area.height;
 
+        // Compute heights for all history cells
+        let mut cell_heights: Vec<u16> = Vec::with_capacity(self.history_cells.len());
         for cell in &self.history_cells {
-            let mut renderable = cell.as_renderable(width);
-            let height = renderable.required_height(width);
-            if y + height > max_y {
+            let renderable = cell.as_renderable(width);
+            cell_heights.push(renderable.required_height(width));
+        }
+
+        // Compute active cell height if present
+        let active_height = self.active_cell.as_ref().map(|cell| {
+            let renderable = cell.as_renderable(width);
+            renderable.required_height(width)
+        });
+
+        // Reserve space for active cell if it fits
+        let mut remaining_height = available_height;
+        let include_active = active_height.map_or(false, |h| h <= remaining_height);
+        if include_active {
+            remaining_height -= active_height.unwrap();
+        }
+
+        // Select history cells from newest to oldest until remaining_height exhausted
+        let mut history_height = 0;
+        let mut start_index = self.history_cells.len(); // index of first cell to render (inclusive)
+        for (i, &height) in cell_heights.iter().enumerate().rev() {
+            if history_height + height > remaining_height {
                 break;
             }
+            history_height += height;
+            start_index = i;
+        }
+
+        let total_height = history_height
+            + if include_active {
+                active_height.unwrap()
+            } else {
+                0
+            };
+
+        // Render selected history cells
+        let mut y = area.y + available_height - total_height; // align to bottom
+        for i in start_index..self.history_cells.len() {
+            let cell = &self.history_cells[i];
+            let mut renderable = cell.as_renderable(width);
+            let height = cell_heights[i];
             let rect = Rect::new(area.x, y, width, height);
             renderable.render(rect, buf);
             y += height;
         }
 
-        if let Some(active) = &self.active_cell {
-            let mut renderable = active.as_renderable(width);
-            let height = renderable.required_height(width);
-            if y + height <= max_y {
-                let rect = Rect::new(area.x, y, width, height);
-                renderable.render(rect, buf);
+        // Render active cell if included
+        if include_active {
+            if let Some(active) = &self.active_cell {
+                let mut renderable = active.as_renderable(width);
+                let height = active_height.unwrap();
+                if y + height <= max_y {
+                    let rect = Rect::new(area.x, y, width, height);
+                    renderable.render(rect, buf);
+                }
             }
         }
     }
