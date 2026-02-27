@@ -63,25 +63,34 @@ pub fn word_wrap_lines(line: &Line, width: u16) -> Vec<Line<'static>> {
 
 /// Create a simple renderable from plain text, preserving newlines.
 pub fn simple_renderable(text: String) -> Box<dyn Renderable> {
-    Box::new(SimpleTextRenderable::new(text))
+    Box::new(SimpleTextRenderable::new(text, None))
+}
+
+/// Create a styled renderable from plain text with the given style.
+pub fn styled_renderable(text: String, style: Style) -> Box<dyn Renderable> {
+    Box::new(SimpleTextRenderable::new(text, Some(style)))
 }
 
 struct SimpleTextRenderable {
     lines: Vec<String>,
+    style: Option<Style>,
 }
 
 impl SimpleTextRenderable {
-    fn new(text: String) -> Self {
+    fn new(text: String, style: Option<Style>) -> Self {
         // Handle empty string as zero lines
         if text.is_empty() {
-            return Self { lines: Vec::new() };
+            return Self {
+                lines: Vec::new(),
+                style,
+            };
         }
         // Split on newline, preserving empty lines
         let lines = text
             .split('\n')
             .map(|s| s.trim_end_matches('\r').to_string())
             .collect();
-        Self { lines }
+        Self { lines, style }
     }
 }
 
