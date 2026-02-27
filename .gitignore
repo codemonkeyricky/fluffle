@@ -25,10 +25,14 @@ Thumbs.db
 
 # Temporary files
 *.log
+*.log.bak
 *.tmp
 *.orig
 *~
 *.dump
+debug.txt
+stderr.out
+stderr.txt
 
 # Local test files
 test_output.txt
