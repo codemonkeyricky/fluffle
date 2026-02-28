@@ -309,7 +309,7 @@ fn load_tool_from_file(path: &Path) -> AnyResult<DynamicToolDef> {
 /// Get built-in tools directory (relative to source)
 fn builtin_tools_dir() -> AnyResult<PathBuf> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src");
+    path.push("app");
     path.push("tools");
     Ok(path)
 }

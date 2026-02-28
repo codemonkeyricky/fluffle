@@ -76,8 +76,8 @@ pub(crate) fn clear_profiles() {
 /// Get built-in profiles directory (relative to source)
 fn builtin_profiles_dir() -> Result<PathBuf> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("src");
-    path.push("agent_profiles");
+    path.push("app");
+    path.push("agents");
     Ok(path)
 }
 
