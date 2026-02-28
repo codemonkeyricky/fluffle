@@ -7,6 +7,7 @@ pub struct BottomPane {
     view_stack: Vec<BottomPaneView>,
 }
 
+#[allow(unreachable_patterns)]
 impl BottomPane {
     pub fn new() -> Self {
         Self {

@@ -7,6 +7,7 @@ pub mod event;
 pub mod headless_backend;
 pub mod history_cell;
 pub mod render;
+pub mod simple_tui;
 pub mod ui_trait;
 
 pub use app::App;
@@ -29,7 +30,7 @@ pub async fn create_ui(
             Ok(Box::new(ui))
         }
         false => {
-            let ui = advanced_tui::AdvancedTerminalUi::new(config).await?;
+            let ui = simple_tui::SimpleTui::new(config).await?;
             Ok(Box::new(ui))
         }
     }
