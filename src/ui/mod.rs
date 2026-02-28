@@ -1,12 +1,12 @@
-pub mod advanced_tui;
+
 pub mod agent_stack;
 pub mod app;
 pub mod bottom_pane;
 pub mod channels;
-pub mod components;
+
 pub mod event;
 pub mod headless_backend;
-pub mod history_cell;
+
 pub mod render;
 pub mod simple_tui;
 pub mod ui_trait;
