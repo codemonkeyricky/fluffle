@@ -1,4 +1,4 @@
-use crate::agent_profile::AgentProfile;
+use crate::agents::AgentProfile;
 use crate::config::Config;
 use crate::plugin::{Plugin, Tool};
 use crate::profile_loader;
@@ -11,7 +11,7 @@ pub struct AgentProfilePlugin;
 
 impl Plugin for AgentProfilePlugin {
     fn name(&self) -> &'static str {
-        "agent_profile"
+        "agents"
     }
 
     fn version(&self) -> &'static str {

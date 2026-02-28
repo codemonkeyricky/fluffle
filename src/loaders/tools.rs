@@ -135,11 +135,11 @@ fn render_command(
     Ok(result)
 }
 
-pub struct DynamicToolsPlugin;
+pub struct ToolsPlugin;
 
-impl Plugin for DynamicToolsPlugin {
+impl Plugin for ToolsPlugin {
     fn name(&self) -> &'static str {
-        "dynamic_tools"
+        "tools"
     }
 
     fn version(&self) -> &'static str {
@@ -147,7 +147,7 @@ impl Plugin for DynamicToolsPlugin {
     }
 
     fn tools(&self) -> Vec<Arc<dyn Tool>> {
-        match load_dynamic_tools() {
+        match load_tools() {
             Ok(defs) => defs
                 .into_iter()
                 .map(|def| Arc::new(DynamicTool::new(def)) as Arc<dyn Tool>)
@@ -255,7 +255,7 @@ impl DynamicTool {
 }
 
 /// Load dynamic tools from built-in and user directories
-fn load_dynamic_tools() -> AnyResult<Vec<DynamicToolDef>> {
+fn load_tools() -> AnyResult<Vec<DynamicToolDef>> {
     let mut tools_map = std::collections::HashMap::new();
 
     // Load built-in tools first
@@ -323,7 +323,7 @@ fn user_tools_dir() -> AnyResult<PathBuf> {
 }
 
 /// Backward compatibility alias
-fn dynamic_tools_dir() -> AnyResult<PathBuf> {
+fn tools_dir() -> AnyResult<PathBuf> {
     user_tools_dir()
 }
 
@@ -444,8 +444,8 @@ mod tests {
     // Note: Integration tests requiring file system are omitted for simplicity.
 }
 
-static DYNAMIC_TOOLS_PLUGIN: DynamicToolsPlugin = DynamicToolsPlugin;
+static TOOLS_PLUGIN: ToolsPlugin = ToolsPlugin;
 
 inventory::submit! {
-    &DYNAMIC_TOOLS_PLUGIN as &'static dyn Plugin
+    &TOOLS_PLUGIN as &'static dyn Plugin
 }

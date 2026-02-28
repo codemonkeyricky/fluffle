@@ -245,11 +245,10 @@ impl Renderable for ChatWidget {
                 if y + height <= max_y {
                     let rect = Rect::new(area.x, y, width, height);
                     renderable.render(rect, buf);
-                                         }
-                                     }
-                                 }
-                             }
-
+                }
+            }
+        }
+    }
 }
 
 /// Advanced terminal UI backend using the Codex‑style layout.

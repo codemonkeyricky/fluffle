@@ -13,7 +13,15 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, buffer::Buffer, layout::Rect, style::{Color, Style}, text::{Line, Span}, widgets::{Paragraph, Widget}, Terminal};
+use ratatui::{
+    backend::CrosstermBackend,
+    buffer::Buffer,
+    layout::Rect,
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Paragraph, Widget},
+    Terminal,
+};
 use std::io;
 use tokio::sync::mpsc;
 
@@ -147,8 +155,10 @@ impl SimpleTui {
             AgentToUi::Error(_) => ("", Color::Red),
             AgentToUi::TokenUsage(usage) => {
                 self.token_usage = usage.clone();
-                let text = format!("Tokens used: prompt: {}, completion: {}, total: {}",
-                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens);
+                let text = format!(
+                    "Tokens used: prompt: {}, completion: {}, total: {}",
+                    usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
+                );
                 self.push_log(Line::from(text));
                 return;
             }
@@ -209,16 +219,14 @@ impl SimpleTui {
         self.clamp_scroll_offset_with_height(self.viewport_height as usize);
     }
 
-
-
     /// Render status line.
     fn render_status_line(&self, area: Rect, buf: &mut Buffer) {
         let status_text = format!(
             "nano code | Model: {} | Provider: {} | Tokens: {}",
             self.model, self.provider, self.token_usage.total_tokens
         );
-        let paragraph = Paragraph::new(Line::from(status_text))
-            .style(Style::default().fg(Color::Yellow));
+        let paragraph =
+            Paragraph::new(Line::from(status_text)).style(Style::default().fg(Color::Yellow));
         paragraph.render(area, buf);
     }
 }
@@ -256,7 +264,8 @@ impl Ui for SimpleTui {
             self.viewport_height = log_height;
 
             let log_rect = Rect::new(0, 0, terminal_size.width, log_height);
-            let bottom_pane_rect = Rect::new(0, log_height, terminal_size.width, bottom_pane_height);
+            let bottom_pane_rect =
+                Rect::new(0, log_height, terminal_size.width, bottom_pane_height);
             let status_rect = Rect::new(
                 0,
                 log_height + bottom_pane_height,
@@ -289,8 +298,10 @@ impl Ui for SimpleTui {
                 let mut y = log_rect.y;
                 for i in start..end {
                     let line = &log_lines[i];
-                    Paragraph::new(line.clone())
-                        .render(Rect::new(log_rect.x, y, log_rect.width, 1), frame.buffer_mut());
+                    Paragraph::new(line.clone()).render(
+                        Rect::new(log_rect.x, y, log_rect.width, 1),
+                        frame.buffer_mut(),
+                    );
                     y += 1;
                 }
 
@@ -348,7 +359,10 @@ impl SimpleTui {
                             // Send request to agent
                             if let Err(e) = self.send_to_agent(UiToAgent::Request(input)).await {
                                 self.push_log(Line::from(vec![
-                                    Span::styled("error sending request: ", Style::default().fg(Color::Red)),
+                                    Span::styled(
+                                        "error sending request: ",
+                                        Style::default().fg(Color::Red),
+                                    ),
                                     Span::raw(e.to_string()),
                                 ]));
                             }

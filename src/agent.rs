@@ -1,4 +1,4 @@
-use crate::agent_profile::AgentProfile;
+use crate::agents::AgentProfile;
 use crate::ai::{create_provider, AiProvider, Message, TokenUsage, ToolCall, ToolDefinition};
 use crate::config::Config;
 use crate::error::Result;

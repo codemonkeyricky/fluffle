@@ -1,4 +1,4 @@
-use crate::agent_profile::AgentProfile;
+use crate::agents::AgentProfile;
 use crate::error::{Error, Result};
 use lazy_static::lazy_static;
 use serde_json;
