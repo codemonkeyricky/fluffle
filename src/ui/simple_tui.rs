@@ -15,7 +15,6 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
@@ -106,6 +105,8 @@ pub struct SimpleTui {
     provider: String,
     /// Token usage statistics.
     token_usage: TokenUsage,
+    /// Active agent type (e.g., "generalist", "explorer").
+    agent_type: String,
 }
 
 impl SimpleTui {
@@ -142,6 +143,7 @@ impl SimpleTui {
             model: config.model.clone(),
             provider: config.provider.clone(),
             token_usage: TokenUsage::default(),
+            agent_type: "generalist".to_string(),
         })
     }
 
@@ -219,16 +221,7 @@ impl SimpleTui {
         self.clamp_scroll_offset_with_height(self.viewport_height as usize);
     }
 
-    /// Render status line.
-    fn render_status_line(&self, area: Rect, buf: &mut Buffer) {
-        let status_text = format!(
-            "nano code | Model: {} | Provider: {} | Tokens: {}",
-            self.model, self.provider, self.token_usage.total_tokens
-        );
-        let paragraph =
-            Paragraph::new(Line::from(status_text)).style(Style::default().fg(Color::Yellow));
-        paragraph.render(area, buf);
-    }
+
 }
 
 #[async_trait]
@@ -252,23 +245,25 @@ impl Ui for SimpleTui {
                 terminal.size()?
             };
 
-            // Compute layout: status line at bottom, input pane above, log area fills the rest.
+            // Compute layout: status line at bottom, agent status above input, input pane above that, log area fills the rest.
             let status_height = 1;
+            let agent_status_height = 1;
             let bottom_pane_height = self.bottom_pane.required_height(terminal_size.width);
-            let max_bottom_height = terminal_size.height.saturating_sub(status_height);
+            let max_bottom_height = terminal_size.height.saturating_sub(status_height + agent_status_height);
             let bottom_pane_height = bottom_pane_height.min(max_bottom_height);
             let available_for_log = terminal_size
                 .height
-                .saturating_sub(bottom_pane_height + status_height);
+                .saturating_sub(bottom_pane_height + agent_status_height + status_height);
             let log_height = available_for_log.max(1);
             self.viewport_height = log_height;
 
             let log_rect = Rect::new(0, 0, terminal_size.width, log_height);
+            let agent_status_rect = Rect::new(0, log_height, terminal_size.width, agent_status_height);
             let bottom_pane_rect =
-                Rect::new(0, log_height, terminal_size.width, bottom_pane_height);
+                Rect::new(0, log_height + agent_status_height, terminal_size.width, bottom_pane_height);
             let status_rect = Rect::new(
                 0,
-                log_height + bottom_pane_height,
+                log_height + agent_status_height + bottom_pane_height,
                 terminal_size.width,
                 status_height,
             );
@@ -283,6 +278,7 @@ impl Ui for SimpleTui {
             let model = &self.model;
             let provider = &self.provider;
             let token_usage = &self.token_usage;
+            let agent_type = &self.agent_type;
 
             let terminal = self.guard.terminal_mut();
             terminal.draw(|frame| {
@@ -304,6 +300,15 @@ impl Ui for SimpleTui {
                     );
                     y += 1;
                 }
+
+                // Render agent status line
+                let agent_status_text = format!(
+                    "Agent: {} | Session tokens: {}",
+                    agent_type, token_usage.total_tokens
+                );
+                let paragraph = Paragraph::new(Line::from(agent_status_text))
+                    .style(Style::default().fg(Color::Cyan));
+                paragraph.render(agent_status_rect, frame.buffer_mut());
 
                 // Render bottom pane
                 bottom_pane.render(bottom_pane_rect, frame.buffer_mut());
