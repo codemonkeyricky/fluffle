@@ -3,10 +3,13 @@ use crate::ai::TokenUsage;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
+use crate::types::ToolResult;
+use crate::ui::agent_stack::AgentStack;
 use crate::ui::bottom_pane::BottomPane;
 use crate::ui::event::{Event, EventHandler};
 use crate::ui::render::Renderable;
 use crate::ui::ui_trait::Ui;
+use tokio::sync::{mpsc, oneshot};
 use async_trait::async_trait;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers},
@@ -22,7 +25,6 @@ use ratatui::{
     Terminal,
 };
 use std::io;
-use tokio::sync::mpsc;
 
 /// Guard that ensures terminal state is restored when dropped.
 struct TerminalGuard {
@@ -85,8 +87,10 @@ impl Drop for TerminalGuard {
 pub struct SimpleTui {
     /// Terminal guard for cleanup.
     guard: TerminalGuard,
-    /// Shared channels for UI↔agent communication.
-    channels: crate::ui::UiChannels,
+    /// Agent stack for managing nested agents.
+    stack: AgentStack,
+    /// Configuration for spawning child agents.
+    config: Config,
     /// Event handler for user input.
     event_handler: EventHandler,
     /// Bottom pane with input composer.
@@ -105,7 +109,8 @@ pub struct SimpleTui {
     provider: String,
     /// Token usage statistics.
     token_usage: TokenUsage,
-    /// Active agent type (e.g., "generalist", "explorer").
+    /// Agent stack display string (e.g., "generalist -> explorer").
+    /// Computed from stack.
     agent_type: String,
 }
 
@@ -119,31 +124,36 @@ impl SimpleTui {
         // Create channel for agent->UI updates
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
 
-        // Spawn agent thread (returns sender for UI->agent requests)
-        let ui_to_agent_tx = spawn(config.clone(), agent_to_ui_tx);
+        // Clone config for spawning agent thread (spawn takes ownership)
+        let config_clone = config.clone();
+        let ui_to_agent_tx = spawn(config_clone, agent_to_ui_tx);
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
-        let channels = crate::ui::UiChannels {
-            agent_to_ui_rx,
-            ui_to_agent_tx: ui_to_agent_tx_clone,
-        };
+        // Create agent stack with base agent
+        let stack = AgentStack::new("generalist".to_string(), ui_to_agent_tx_clone, agent_to_ui_rx);
+        let agent_type = stack.stack_display();
 
         let event_handler = EventHandler::new(250);
         let bottom_pane = BottomPane::new();
 
+        // Extract model and provider before moving config into struct
+        let model = config.model.clone();
+        let provider = config.provider.clone();
+
         Ok(Self {
             guard,
-            channels,
+            stack,
+            config,
             event_handler,
             bottom_pane,
             log_lines: Vec::new(),
             scroll_offset: 0,
             auto_scroll: true,
             viewport_height: 0,
-            model: config.model.clone(),
-            provider: config.provider.clone(),
+            model,
+            provider,
             token_usage: TokenUsage::default(),
-            agent_type: "generalist".to_string(),
+            agent_type,
         })
     }
 
@@ -155,6 +165,7 @@ impl SimpleTui {
             AgentToUi::Thinking(_) => ("Thinking: ", Color::Blue),
             AgentToUi::Response(_) => ("", Color::Green),
             AgentToUi::Error(_) => ("", Color::Red),
+            AgentToUi::SpawnChild { .. } => ("Spawning child agent: ", Color::Cyan),
             AgentToUi::TokenUsage(usage) => {
                 self.token_usage = usage.clone();
                 let text = format!(
@@ -171,6 +182,10 @@ impl SimpleTui {
             AgentToUi::Thinking(text) => text,
             AgentToUi::Response(text) => text,
             AgentToUi::Error(text) => text,
+            AgentToUi::SpawnChild { name, description, system_prompt, result_tx: _ } => {
+                let prompt_info = system_prompt.map_or_else(|| "".to_string(), |p| format!(", prompt: {}", p));
+                format!("{}: {}{}", name, description, prompt_info)
+            }
             AgentToUi::TokenUsage(_) => unreachable!(),
         };
         // Split by newlines, add prefix only to first line.
@@ -227,11 +242,15 @@ impl SimpleTui {
 #[async_trait]
 impl Ui for SimpleTui {
     fn agent_rx(&mut self) -> &mut mpsc::Receiver<AgentToUi> {
-        &mut self.channels.agent_to_ui_rx
+        self.stack.current_rx().expect("agent stack is empty")
     }
 
     fn agent_tx(&mut self) -> &mut mpsc::Sender<UiToAgent> {
-        &mut self.channels.ui_to_agent_tx
+        self.stack.current_tx_mut().expect("agent stack is empty")
+    }
+
+    fn current_agent_name(&self) -> Option<&str> {
+        self.stack.current_name()
     }
 
     async fn next_user_event(&mut self) -> Option<Event> {
@@ -303,7 +322,7 @@ impl Ui for SimpleTui {
 
                 // Render agent status line
                 let agent_status_text = format!(
-                    "Agent: {} | Session tokens: {}",
+                    "Agent Stack: {} | Session tokens: {}",
                     agent_type, token_usage.total_tokens
                 );
                 let paragraph = Paragraph::new(Line::from(agent_status_text))
@@ -323,16 +342,29 @@ impl Ui for SimpleTui {
                 paragraph.render(status_rect, frame.buffer_mut());
             })?;
 
-            tokio::select! {
-                Some(event) = self.event_handler.next() => {
-                    if self.handle_event(event).await? {
-                        break;
+            let mut event_result = None;
+            let mut msg_result = None;
+            {
+                let event_handler = &mut self.event_handler;
+                let stack = &mut self.stack;
+                let agent_rx = stack.current_rx().expect("agent stack is empty");
+                tokio::select! {
+                    Some(event) = async { event_handler.next().await } => {
+                        event_result = Some(event);
                     }
+                    Some(msg) = async { agent_rx.recv().await } => {
+                        msg_result = Some(msg);
+                    }
+                    else => break,
                 }
-                Some(msg) = self.channels.agent_to_ui_rx.recv() => {
-                    self.handle_agent_message(msg).await?;
+            }
+            if let Some(event) = event_result {
+                if self.handle_event(event).await? {
+                    break;
                 }
-                else => break,
+            }
+            if let Some(msg) = msg_result {
+                self.handle_incoming_message(msg).await?;
             }
         }
 
@@ -425,6 +457,96 @@ impl SimpleTui {
             Event::TaskCompleted => {}
         }
         Ok(false)
+    }
+
+    async fn handle_incoming_message(&mut self, msg: AgentToUi) -> Result<()> {
+        match msg {
+            AgentToUi::SpawnChild { name, description, system_prompt, result_tx } => {
+                self.spawn_child_agent(name, description, system_prompt, result_tx).await?;
+            }
+            // If this is a final message from a child agent, we need to pop the stack
+            // and send the result to parent.
+            AgentToUi::Response(ref text) | AgentToUi::Error(ref text) => {
+                let is_child = self.stack.len() > 1;
+                if is_child {
+                    // Child agent has completed
+                    let success = matches!(msg, AgentToUi::Response(_));
+                    let error = if success { None } else { Some(text.clone()) };
+                    let output = text.clone();
+                    let result_text = text.clone();
+                    let result = if success {
+                        ToolResult::success(result_text)
+                    } else {
+                        ToolResult::error(result_text)
+                    };
+                    // Pop the child from stack, sending result to parent via oneshot
+                    let popped = self.stack.pop(Some(result));
+                    // Update UI agent type after pop
+                    self.update_agent_type_from_stack();
+                    // Also need to send ChildResult to parent agent via its UI channel
+                    if let Some(parent_tx) = self.stack.current_tx() {
+                        let child_result = UiToAgent::ChildResult {
+                            success,
+                            output,
+                            error,
+                        };
+                        let _ = parent_tx.send(child_result).await;
+                    }
+                    // Clean up popped agent (dropped)
+                    drop(popped);
+                }
+                // Always log the response/error
+                self.push_agent_message(msg);
+            }
+            _ => {
+                // Regular message, just log it
+                self.push_agent_message(msg);
+            }
+        }
+        Ok(())
+    }
+
+    /// Update the agent stack display from the current stack state.
+    fn update_agent_type_from_stack(&mut self) {
+        self.agent_type = self.stack.stack_display();
+    }
+
+    async fn spawn_child_agent(
+        &mut self,
+        name: String,
+        description: String,
+        system_prompt: Option<String>,
+        result_tx: oneshot::Sender<ToolResult>,
+    ) -> Result<()> {
+        // Create agent based on profile name or system prompt
+        let agent = if let Ok(profile_agent) = crate::Agent::new_with_profile(&name, self.config.clone()) {
+            profile_agent
+        } else {
+            // Create generic agent with optional system prompt
+            let mut agent = crate::Agent::new(self.config.clone())?;
+            if let Some(prompt) = system_prompt {
+                agent = agent.with_system_prompt(Some(prompt))?;
+            }
+            agent
+        };
+        
+        // Create channel pair for child agent
+        let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
+        let ui_to_agent_tx = crate::agent_thread::spawn_with_agent(agent, agent_to_ui_tx);
+        
+        // Push child onto stack with provided result channel
+        self.stack.push_with_result_tx(name.clone(), ui_to_agent_tx, agent_to_ui_rx, result_tx);
+        
+        // Send the task description to the child agent
+        if let Some(child_tx) = self.stack.current_tx() {
+            child_tx.send(UiToAgent::Request(description)).await
+                .map_err(|e| crate::error::Error::Ai(format!("Failed to send request to child agent: {}", e)))?;
+        }
+        
+        // Update agent_type for UI display
+        self.update_agent_type_from_stack();
+        
+        Ok(())
     }
 
     async fn handle_agent_message(&mut self, msg: AgentToUi) -> Result<()> {
