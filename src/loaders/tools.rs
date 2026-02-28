@@ -1,3 +1,4 @@
+use crate::app_name;
 use crate::plugin::{Plugin, Tool};
 use crate::types::{ToolContext, ToolParameters, ToolResult};
 use anyhow::{anyhow, Context, Result as AnyResult};
@@ -309,23 +310,22 @@ fn load_tool_from_file(path: &Path) -> AnyResult<DynamicToolDef> {
 /// Get built-in tools directory (relative to source)
 fn builtin_tools_dir() -> AnyResult<PathBuf> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("app");
+    path.push("apps");
+    path.push(app_name::get_app_name());
     path.push("tools");
     Ok(path)
 }
 
-/// Get user tools directory (~/.config/nanocode/tools)
+/// Get user tools directory (~/.config/nanocode/<app>/tools)
 fn user_tools_dir() -> AnyResult<PathBuf> {
     let mut path = dirs::config_dir().context("Could not find config directory")?;
     path.push("nanocode");
+    path.push(app_name::get_app_name());
     path.push("tools");
     Ok(path)
 }
 
-/// Backward compatibility alias
-fn tools_dir() -> AnyResult<PathBuf> {
-    user_tools_dir()
-}
+
 
 #[cfg(test)]
 mod tests {

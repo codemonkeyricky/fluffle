@@ -1,4 +1,5 @@
 use crate::agents::AgentProfile;
+use crate::app_name;
 use crate::error::{Error, Result};
 use lazy_static::lazy_static;
 use serde_json;
@@ -76,16 +77,18 @@ pub(crate) fn clear_profiles() {
 /// Get built-in profiles directory (relative to source)
 fn builtin_profiles_dir() -> Result<PathBuf> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    path.push("app");
+    path.push("apps");
+    path.push(app_name::get_app_name());
     path.push("agents");
     Ok(path)
 }
 
-/// Get user profiles directory (~/.config/nanocode/agents/)
+/// Get user profiles directory (~/.config/nanocode/<app>/agents/)
 fn user_profiles_dir() -> Result<PathBuf> {
     let mut path = dirs::config_dir()
         .ok_or_else(|| Error::ConfigLoad("Could not find config directory".to_string()))?;
     path.push("nanocode");
+    path.push(app_name::get_app_name());
     path.push("agents");
     Ok(path)
 }

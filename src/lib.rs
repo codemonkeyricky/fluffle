@@ -26,6 +26,7 @@ pub mod loaders;
 pub mod messaging;
 pub mod plugin;
 pub mod profile_loader;
+pub mod app_name;
 pub mod types;
 pub mod ui;
 
