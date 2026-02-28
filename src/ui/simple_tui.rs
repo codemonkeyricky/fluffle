@@ -88,6 +88,8 @@ pub struct SimpleTui {
     log_lines: Vec<Line<'static>>,
     /// Current scroll offset (lines from bottom).
     scroll_offset: usize,
+    /// Whether to auto-scroll to bottom when new messages arrive.
+    auto_scroll: bool,
     /// Current viewport height for log area (lines).
     viewport_height: u16,
     /// Model name.
@@ -127,6 +129,7 @@ impl SimpleTui {
             bottom_pane,
             log_lines: Vec::new(),
             scroll_offset: 0,
+            auto_scroll: true,
             viewport_height: 0,
             model: config.model.clone(),
             provider: config.provider.clone(),
@@ -173,12 +176,14 @@ impl SimpleTui {
         }
     }
 
-    /// Add a new log line and auto-scroll.
+    /// Add a new log line.
     fn push_log(&mut self, line: Line<'static>) {
         self.log_lines.push(line);
         // Keep last N lines? For now keep all.
-        // Auto-scroll: scroll offset stays at bottom.
-        self.scroll_offset = 0;
+        // Auto-scroll to bottom if auto_scroll is enabled.
+        if self.auto_scroll {
+            self.scroll_offset = 0;
+        }
     }
 
     /// Clamp scroll offset based on current log lines and viewport height.
@@ -186,6 +191,10 @@ impl SimpleTui {
     fn clamp_scroll_offset_with_height(&mut self, viewport_height: usize) {
         let total_lines = self.log_lines.len();
         if total_lines <= viewport_height {
+            self.scroll_offset = 0;
+            return;
+        }
+        if self.auto_scroll {
             self.scroll_offset = 0;
             return;
         }
@@ -329,6 +338,8 @@ impl SimpleTui {
                     if let Some(composer) = self.bottom_pane.active_composer_mut() {
                         let input = std::mem::take(composer.input_mut());
                         if !input.is_empty() {
+                            // Auto-scroll to see new message and response
+                            self.auto_scroll = true;
                             // Add user input to log
                             self.push_log(Line::from(vec![
                                 Span::styled("> ", Style::default().fg(Color::Cyan)),
@@ -356,29 +367,35 @@ impl SimpleTui {
                 }
                 KeyCode::Up => {
                     // Scroll log up (increase scroll offset)
+                    self.auto_scroll = false;
                     self.scroll_offset = self.scroll_offset.saturating_add(1);
                     self.clamp_scroll_offset();
                 }
                 KeyCode::Down => {
                     // Scroll log down (decrease scroll offset)
+                    self.auto_scroll = false;
                     self.scroll_offset = self.scroll_offset.saturating_sub(1);
                     self.clamp_scroll_offset();
                 }
                 KeyCode::PageUp => {
+                    self.auto_scroll = false;
                     self.scroll_offset = self.scroll_offset.saturating_add(10);
                     self.clamp_scroll_offset();
                 }
                 KeyCode::PageDown => {
+                    self.auto_scroll = false;
                     self.scroll_offset = self.scroll_offset.saturating_sub(10);
                     self.clamp_scroll_offset();
                 }
                 KeyCode::Home => {
                     // scroll to top
+                    self.auto_scroll = false;
                     self.scroll_offset = usize::MAX;
                     self.clamp_scroll_offset();
                 }
                 KeyCode::End => {
                     // scroll to bottom
+                    self.auto_scroll = true;
                     self.scroll_offset = 0;
                 }
                 _ => {}
