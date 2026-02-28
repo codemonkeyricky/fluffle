@@ -3,6 +3,7 @@ use crate::agent_thread::spawn_with_agent;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
+use crate::types::ToolResult;
 use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
 use tokio::sync::mpsc;
@@ -13,6 +14,8 @@ const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access
 pub struct HeadlessUi {
     /// Shared channels for UI↔agent communication.
     channels: crate::ui::UiChannels,
+    /// Configuration for spawning child agents.
+    config: Config,
     /// Optional initial prompt to send immediately.
     prompt: Option<String>,
 }
@@ -36,7 +39,11 @@ impl HeadlessUi {
             ui_to_agent_tx,
         };
 
-        Ok(Self { channels, prompt })
+        Ok(Self {
+            channels,
+            config,
+            prompt,
+        })
     }
 
     /// Read input from stdin if no prompt provided.
@@ -51,6 +58,40 @@ impl HeadlessUi {
                 io::ErrorKind::UnexpectedEof,
                 "No input provided",
             ))),
+        }
+    }
+
+    /// Spawn a child agent inline (headless mode).
+    async fn spawn_child_inline(
+        &self,
+        name: String,
+        description: String,
+        system_prompt: Option<String>,
+    ) -> ToolResult {
+        // Try to create agent with profile first
+        let mut agent = match Agent::new_with_profile(&name, self.config.clone()) {
+            Ok(agent) => agent,
+            Err(_) => {
+                // Fall back to generic agent
+                match Agent::new(self.config.clone()) {
+                    Ok(agent) => agent,
+                    Err(e) => return ToolResult::error(format!("Failed to create agent: {}", e)),
+                }
+            }
+        };
+
+        // Apply custom system prompt if provided (overrides profile)
+        if let Some(prompt) = system_prompt {
+            match agent.with_system_prompt(Some(prompt)) {
+                Ok(subagent) => agent = subagent,
+                Err(e) => return ToolResult::error(format!("Failed to set system prompt: {}", e)),
+            }
+        }
+
+        // Run the task
+        match agent.process(&description).await {
+            Ok(summary) => ToolResult::success(summary),
+            Err(e) => ToolResult::error(format!("Child agent failed: {}", e)),
         }
     }
 }
@@ -110,6 +151,22 @@ impl Ui for HeadlessUi {
                         "Tokens used: prompt: {}, completion: {}, total: {}",
                         usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                     );
+                }
+                AgentToUi::SpawnChild {
+                    name,
+                    description,
+                    system_prompt,
+                    result_tx,
+                } => {
+                    println!(
+                        "\x1b[90mSpawning child agent {}: {}\x1b[0m",
+                        name, description
+                    );
+                    // Inline execution for headless mode
+                    let result = self
+                        .spawn_child_inline(name, description, system_prompt)
+                        .await;
+                    let _ = result_tx.send(result);
                 }
             }
         }

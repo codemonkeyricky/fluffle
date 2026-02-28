@@ -9,7 +9,6 @@ use crate::ui::bottom_pane::BottomPane;
 use crate::ui::event::{Event, EventHandler};
 use crate::ui::render::Renderable;
 use crate::ui::ui_trait::Ui;
-use tokio::sync::{mpsc, oneshot};
 use async_trait::async_trait;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyModifiers},
@@ -25,6 +24,7 @@ use ratatui::{
     Terminal,
 };
 use std::io;
+use tokio::sync::{mpsc, oneshot};
 
 /// Guard that ensures terminal state is restored when dropped.
 struct TerminalGuard {
@@ -130,7 +130,11 @@ impl SimpleTui {
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
         // Create agent stack with base agent
-        let stack = AgentStack::new("generalist".to_string(), ui_to_agent_tx_clone, agent_to_ui_rx);
+        let stack = AgentStack::new(
+            "generalist".to_string(),
+            ui_to_agent_tx_clone,
+            agent_to_ui_rx,
+        );
         let agent_type = stack.stack_display();
 
         let event_handler = EventHandler::new(250);
@@ -182,8 +186,14 @@ impl SimpleTui {
             AgentToUi::Thinking(text) => text,
             AgentToUi::Response(text) => text,
             AgentToUi::Error(text) => text,
-            AgentToUi::SpawnChild { name, description, system_prompt, result_tx: _ } => {
-                let prompt_info = system_prompt.map_or_else(|| "".to_string(), |p| format!(", prompt: {}", p));
+            AgentToUi::SpawnChild {
+                name,
+                description,
+                system_prompt,
+                result_tx: _,
+            } => {
+                let prompt_info =
+                    system_prompt.map_or_else(|| "".to_string(), |p| format!(", prompt: {}", p));
                 format!("{}: {}{}", name, description, prompt_info)
             }
             AgentToUi::TokenUsage(_) => unreachable!(),
@@ -235,8 +245,6 @@ impl SimpleTui {
     fn clamp_scroll_offset(&mut self) {
         self.clamp_scroll_offset_with_height(self.viewport_height as usize);
     }
-
-
 }
 
 #[async_trait]
@@ -268,7 +276,9 @@ impl Ui for SimpleTui {
             let status_height = 1;
             let agent_status_height = 1;
             let bottom_pane_height = self.bottom_pane.required_height(terminal_size.width);
-            let max_bottom_height = terminal_size.height.saturating_sub(status_height + agent_status_height);
+            let max_bottom_height = terminal_size
+                .height
+                .saturating_sub(status_height + agent_status_height);
             let bottom_pane_height = bottom_pane_height.min(max_bottom_height);
             let available_for_log = terminal_size
                 .height
@@ -277,9 +287,14 @@ impl Ui for SimpleTui {
             self.viewport_height = log_height;
 
             let log_rect = Rect::new(0, 0, terminal_size.width, log_height);
-            let agent_status_rect = Rect::new(0, log_height, terminal_size.width, agent_status_height);
-            let bottom_pane_rect =
-                Rect::new(0, log_height + agent_status_height, terminal_size.width, bottom_pane_height);
+            let agent_status_rect =
+                Rect::new(0, log_height, terminal_size.width, agent_status_height);
+            let bottom_pane_rect = Rect::new(
+                0,
+                log_height + agent_status_height,
+                terminal_size.width,
+                bottom_pane_height,
+            );
             let status_rect = Rect::new(
                 0,
                 log_height + agent_status_height + bottom_pane_height,
@@ -461,8 +476,14 @@ impl SimpleTui {
 
     async fn handle_incoming_message(&mut self, msg: AgentToUi) -> Result<()> {
         match msg {
-            AgentToUi::SpawnChild { name, description, system_prompt, result_tx } => {
-                self.spawn_child_agent(name, description, system_prompt, result_tx).await?;
+            AgentToUi::SpawnChild {
+                name,
+                description,
+                system_prompt,
+                result_tx,
+            } => {
+                self.spawn_child_agent(name, description, system_prompt, result_tx)
+                    .await?;
             }
             // If this is a final message from a child agent, we need to pop the stack
             // and send the result to parent.
@@ -519,33 +540,39 @@ impl SimpleTui {
         result_tx: oneshot::Sender<ToolResult>,
     ) -> Result<()> {
         // Create agent based on profile name or system prompt
-        let agent = if let Ok(profile_agent) = crate::Agent::new_with_profile(&name, self.config.clone()) {
-            profile_agent
-        } else {
-            // Create generic agent with optional system prompt
-            let mut agent = crate::Agent::new(self.config.clone())?;
-            if let Some(prompt) = system_prompt {
-                agent = agent.with_system_prompt(Some(prompt))?;
-            }
-            agent
-        };
-        
+        let agent =
+            if let Ok(profile_agent) = crate::Agent::new_with_profile(&name, self.config.clone()) {
+                profile_agent
+            } else {
+                // Create generic agent with optional system prompt
+                let mut agent = crate::Agent::new(self.config.clone())?;
+                if let Some(prompt) = system_prompt {
+                    agent = agent.with_system_prompt(Some(prompt))?;
+                }
+                agent
+            };
+
         // Create channel pair for child agent
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
         let ui_to_agent_tx = crate::agent_thread::spawn_with_agent(agent, agent_to_ui_tx);
-        
+
         // Push child onto stack with provided result channel
-        self.stack.push_with_result_tx(name.clone(), ui_to_agent_tx, agent_to_ui_rx, result_tx);
-        
+        self.stack
+            .push_with_result_tx(name.clone(), ui_to_agent_tx, agent_to_ui_rx, result_tx);
+
         // Send the task description to the child agent
         if let Some(child_tx) = self.stack.current_tx() {
-            child_tx.send(UiToAgent::Request(description)).await
-                .map_err(|e| crate::error::Error::Ai(format!("Failed to send request to child agent: {}", e)))?;
+            child_tx
+                .send(UiToAgent::Request(description))
+                .await
+                .map_err(|e| {
+                    crate::error::Error::Ai(format!("Failed to send request to child agent: {}", e))
+                })?;
         }
-        
+
         // Update agent_type for UI display
         self.update_agent_type_from_stack();
-        
+
         Ok(())
     }
 

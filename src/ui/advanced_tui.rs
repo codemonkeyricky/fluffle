@@ -121,6 +121,9 @@ impl ChatWidget {
             AgentToUi::Thinking(text) => {
                 Box::new(PlainHistoryCell::new(format!("Thinking: {}", text)))
             }
+            AgentToUi::SpawnChild { .. } => {
+                Box::new(PlainHistoryCell::new("Spawning child agent...".to_string()))
+            }
         }
     }
 

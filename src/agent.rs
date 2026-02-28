@@ -275,6 +275,10 @@ impl Agent {
                 UiToAgent::Shutdown => {
                     break;
                 }
+                UiToAgent::ChildResult { .. } => {
+                    // Child results are handled via oneshot channels; ignore here
+                    tracing::debug!("Received ChildResult via UI channel (already handled)");
+                }
             }
         }
         Ok(())

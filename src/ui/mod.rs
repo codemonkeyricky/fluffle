@@ -1,4 +1,5 @@
 pub mod advanced_tui;
+pub mod agent_stack;
 pub mod app;
 pub mod bottom_pane;
 pub mod channels;
@@ -10,6 +11,7 @@ pub mod render;
 pub mod simple_tui;
 pub mod ui_trait;
 
+pub use agent_stack::{AgentHandle, AgentStack};
 pub use app::App;
 pub use channels::UiChannels;
 pub use event::{Event, EventHandler};

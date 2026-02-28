@@ -105,6 +105,10 @@ impl App {
                 self.token_usage = usage;
                 false
             }
+            AgentToUi::SpawnChild { .. } => {
+                self.messages.push("Spawning child agent...".to_string());
+                false
+            }
         }
     }
 

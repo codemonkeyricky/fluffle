@@ -15,6 +15,11 @@ pub trait Ui {
     fn agent_rx(&mut self) -> &mut mpsc::Receiver<AgentToUi>;
     /// Get a mutable reference to the UI-to-agent sender.
     fn agent_tx(&mut self) -> &mut mpsc::Sender<UiToAgent>;
+    /// Get the name of the currently active agent (for UI display).
+    /// Returns None if no agent is active or name is unknown.
+    fn current_agent_name(&self) -> Option<&str> {
+        None
+    }
 
     /// Receive a message from the agent (default implementation uses agent_rx).
     async fn recv_from_agent(&mut self) -> Option<AgentToUi> {
