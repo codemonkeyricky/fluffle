@@ -12,17 +12,42 @@ use tokio::sync::mpsc;
 /// Create a new agent thread with the given configuration and channels.
 /// Spawns the agent task and returns a handle to send requests.
 pub fn spawn(config: Config, ui_tx: mpsc::Sender<AgentToUi>, workdir: Option<PathBuf>) -> mpsc::Sender<UiToAgent> {
+    spawn_with_profile(config, ui_tx, workdir, None)
+}
+
+/// Create a new agent thread with a specific profile.
+pub fn spawn_with_profile(
+    config: Config,
+    ui_tx: mpsc::Sender<AgentToUi>,
+    workdir: Option<PathBuf>,
+    profile_name: Option<String>,
+) -> mpsc::Sender<UiToAgent> {
+    eprintln!("[DEBUG] spawn_with_profile, profile_name: {:?}", profile_name);
     let (agent_tx, agent_rx) = mpsc::channel(100);
 
     // Clone ui_tx for error reporting before moving into agent
     let ui_tx_clone = ui_tx.clone();
     tokio::spawn(async move {
-        // Create agent with both channels
-        let mut agent = match Agent::new_with_channels(config, ui_tx, agent_rx, workdir) {
-            Ok(agent) => agent,
-            Err(e) => {
-                let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
-                return;
+        // Create agent with both channels, optionally with profile
+        let mut agent = if let Some(profile) = profile_name {
+            match Agent::new_with_profile(&profile, config, workdir) {
+                Ok(mut agent) => {
+                    agent.set_agent_to_ui_tx(ui_tx.clone());
+                    agent.set_ui_to_agent_rx(agent_rx);
+                    agent
+                }
+                Err(e) => {
+                    let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
+                    return;
+                }
+            }
+        } else {
+            match Agent::new_with_channels(config, ui_tx, agent_rx, workdir) {
+                Ok(agent) => agent,
+                Err(e) => {
+                    let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;
+                    return;
+                }
             }
         };
 

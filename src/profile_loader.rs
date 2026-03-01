@@ -20,9 +20,14 @@ static PROFILES_LOADED: AtomicBool = AtomicBool::new(false);
 pub fn load_profiles() -> Result<()> {
     // Skip if already loaded
     if PROFILES_LOADED.load(Ordering::SeqCst) {
+        tracing::debug!("Profiles already loaded");
         return Ok(());
     }
 
+    println!(
+        "[DEBUG] Loading profiles for app: {}",
+        app_name::get_app_name()
+    );
     let mut registry = PROFILE_REGISTRY.write().map_err(|e| {
         Error::Agent(format!(
             "Failed to acquire write lock on profile registry: {}",
@@ -35,14 +40,22 @@ pub fn load_profiles() -> Result<()> {
 
     // Load built-in profiles
     let builtin_dir = builtin_profiles_dir()?;
+    tracing::debug!("Built-in profiles dir: {:?}", builtin_dir);
     if builtin_dir.exists() {
+        tracing::debug!("Built-in dir exists, loading profiles");
         load_profiles_from_dir(&builtin_dir, &mut registry)?;
+    } else {
+        println!("[DEBUG] Built-in dir does not exist");
     }
 
     // Load user profiles (override built-in ones)
     let user_dir = user_profiles_dir()?;
+    println!("[DEBUG] User profiles dir: {:?}", user_dir);
     if user_dir.exists() {
+        println!("[DEBUG] User dir exists, loading profiles");
         load_profiles_from_dir(&user_dir, &mut registry)?;
+    } else {
+        println!("[DEBUG] User dir does not exist");
     }
 
     PROFILES_LOADED.store(true, Ordering::SeqCst);
@@ -51,6 +64,13 @@ pub fn load_profiles() -> Result<()> {
 
 /// Get a profile by name, returns None if not found
 pub fn get_profile(name: &str) -> Option<AgentProfile> {
+    // Ensure profiles are loaded
+    if !PROFILES_LOADED.load(Ordering::SeqCst) {
+        if let Err(e) = load_profiles() {
+            tracing::debug!("Failed to load profiles: {}", e);
+            return None;
+        }
+    }
     let registry = PROFILE_REGISTRY.read().ok()?;
     registry.get(name).cloned()
 }

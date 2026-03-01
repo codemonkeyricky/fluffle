@@ -1,5 +1,6 @@
-use crate::agent_thread::spawn;
+use crate::agent_thread::{spawn, spawn_with_profile};
 use crate::ai::TokenUsage;
+use crate::app_name;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
@@ -127,14 +128,22 @@ impl SimpleTui {
         // Create channel for agent->UI updates
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
 
+        // Determine default profile based on app
+        let default_profile = if app_name::get_app_name() == "plan-builder" {
+            "task-agent".to_string()
+        } else {
+            "generalist".to_string()
+        };
+        eprintln!("[DEBUG] Using profile: {}", default_profile);
+
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();
-        let ui_to_agent_tx = spawn(config_clone, agent_to_ui_tx, workdir.clone());
+        let ui_to_agent_tx = spawn_with_profile(config_clone, agent_to_ui_tx, workdir.clone(), Some(default_profile.clone()));
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
         // Create agent stack with base agent
         let stack = AgentStack::new(
-            "generalist".to_string(),
+            default_profile,
             ui_to_agent_tx_clone,
             agent_to_ui_rx,
         );

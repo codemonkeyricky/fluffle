@@ -104,11 +104,18 @@ impl Agent {
 
     /// Apply profile settings to existing agent
     fn apply_profile(&mut self, profile: &AgentProfile) -> Result<()> {
+        tracing::debug!("Applying profile: {}", profile.name);
+        tracing::debug!("Profile tools: {:?}", profile.tools);
         // Filter tools based on profile whitelist
         self.filter_tools(&profile.tools)?;
 
         // Set system prompt
         self.system_prompt = Some(profile.system_prompt.clone());
+
+        // Add system prompt to history as a user message (following with_system_prompt pattern)
+        if !profile.system_prompt.is_empty() {
+            self.history.push(Message::user(&profile.system_prompt));
+        }
 
         // Apply config overrides
         self.apply_config_overrides(&profile.config_overrides)?;
@@ -118,11 +125,13 @@ impl Agent {
 
     /// Filter tools to only include those in the whitelist
     fn filter_tools(&mut self, tool_names: &[String]) -> Result<()> {
+        tracing::debug!("Filtering tools: {:?}", tool_names);
         let available_tools: HashMap<String, Arc<dyn crate::plugin::Tool>> = self
             .tools
             .iter()
             .map(|t| (t.name().to_string(), t.clone()))
             .collect();
+        tracing::debug!("Available tools: {:?}", available_tools.keys());
 
         let mut filtered = Vec::new();
         for name in tool_names {
@@ -133,6 +142,7 @@ impl Agent {
                 if profile_loader::has_profile(name) {
                     // Profile tools are handled separately by the profile plugin
                     // They'll be available through their own tool registration
+                    tracing::debug!("Skipping profile tool: {}", name);
                     continue;
                 }
                 // Return error for unknown tools
@@ -143,6 +153,7 @@ impl Agent {
             }
         }
 
+        tracing::debug!("Filtered tools: {:?}", filtered.iter().map(|t| t.name()).collect::<Vec<_>>());
         self.tools = filtered;
         Ok(())
     }

@@ -1,5 +1,6 @@
 use crate::agent::Agent;
 use crate::agent_thread::spawn_with_agent;
+use crate::app_name;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
@@ -27,9 +28,23 @@ impl HeadlessUi {
     /// Create a new headless UI backend.
     /// Creates channels and spawns agent thread with system prompt.
     pub fn new(config: Config, prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
-        // Create agent with system prompt
-        let agent = Agent::new(config.clone(), workdir.clone())?;
-        let agent = agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?;
+
+        // Determine profile based on app
+        let profile_name = if app_name::get_app_name() == "plan-builder" {
+            "task-agent".to_string()
+        } else {
+            "generalist".to_string()
+        };
+
+        // Try to create agent with profile, fall back to generic agent
+        let agent = match Agent::new_with_profile(&profile_name, config.clone(), workdir.clone()) {
+            Ok(agent) => agent,
+            Err(_) => {
+                // Profile not found, fall back to generic agent with default system prompt
+                let agent = Agent::new(config.clone(), workdir.clone())?;
+                agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?
+            }
+        };
 
         // Create channel for agent->UI updates
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
