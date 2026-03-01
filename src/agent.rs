@@ -80,7 +80,11 @@ impl Agent {
     }
 
     /// Create agent with a specific profile
-    pub fn new_with_profile(profile_name: &str, config: Config, working_directory: Option<PathBuf>) -> Result<Self> {
+    pub fn new_with_profile(
+        profile_name: &str,
+        config: Config,
+        working_directory: Option<PathBuf>,
+    ) -> Result<Self> {
         let profile = profile_loader::get_profile(profile_name).ok_or_else(|| {
             crate::error::Error::Agent(format!("Profile not found: {}", profile_name))
         })?;
@@ -153,7 +157,10 @@ impl Agent {
             }
         }
 
-        tracing::debug!("Filtered tools: {:?}", filtered.iter().map(|t| t.name()).collect::<Vec<_>>());
+        tracing::debug!(
+            "Filtered tools: {:?}",
+            filtered.iter().map(|t| t.name()).collect::<Vec<_>>()
+        );
         self.tools = filtered;
         Ok(())
     }

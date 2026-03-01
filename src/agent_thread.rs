@@ -11,7 +11,11 @@ use tokio::sync::mpsc;
 
 /// Create a new agent thread with the given configuration and channels.
 /// Spawns the agent task and returns a handle to send requests.
-pub fn spawn(config: Config, ui_tx: mpsc::Sender<AgentToUi>, workdir: Option<PathBuf>) -> mpsc::Sender<UiToAgent> {
+pub fn spawn(
+    config: Config,
+    ui_tx: mpsc::Sender<AgentToUi>,
+    workdir: Option<PathBuf>,
+) -> mpsc::Sender<UiToAgent> {
     spawn_with_profile(config, ui_tx, workdir, None)
 }
 

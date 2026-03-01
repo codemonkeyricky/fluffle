@@ -137,15 +137,16 @@ impl SimpleTui {
 
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();
-        let ui_to_agent_tx = spawn_with_profile(config_clone, agent_to_ui_tx, workdir.clone(), Some(default_profile.clone()));
+        let ui_to_agent_tx = spawn_with_profile(
+            config_clone,
+            agent_to_ui_tx,
+            workdir.clone(),
+            Some(default_profile.clone()),
+        );
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
         // Create agent stack with base agent
-        let stack = AgentStack::new(
-            default_profile,
-            ui_to_agent_tx_clone,
-            agent_to_ui_rx,
-        );
+        let stack = AgentStack::new(default_profile, ui_to_agent_tx_clone, agent_to_ui_rx);
         let agent_type = stack.stack_display();
 
         let event_handler = EventHandler::new(250);
@@ -552,17 +553,18 @@ impl SimpleTui {
         result_tx: oneshot::Sender<ToolResult>,
     ) -> Result<()> {
         // Create agent based on profile name or system prompt
-        let agent =
-            if let Ok(profile_agent) = crate::Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
-                profile_agent
-            } else {
-                // Create generic agent with optional system prompt
-                let mut agent = crate::Agent::new(self.config.clone(), self.workdir.clone())?;
-                if let Some(prompt) = system_prompt {
-                    agent = agent.with_system_prompt(Some(prompt))?;
-                }
-                agent
-            };
+        let agent = if let Ok(profile_agent) =
+            crate::Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone())
+        {
+            profile_agent
+        } else {
+            // Create generic agent with optional system prompt
+            let mut agent = crate::Agent::new(self.config.clone(), self.workdir.clone())?;
+            if let Some(prompt) = system_prompt {
+                agent = agent.with_system_prompt(Some(prompt))?;
+            }
+            agent
+        };
 
         // Create channel pair for child agent
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);

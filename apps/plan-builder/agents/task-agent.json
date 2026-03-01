@@ -9,6 +9,6 @@
   ],
   "config_overrides": {
     "temperature": 0.1,
-    "max_tool_iterations": 50
+    "max_tool_iterations": 100
   }
 }

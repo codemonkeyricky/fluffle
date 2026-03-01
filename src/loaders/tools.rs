@@ -232,10 +232,27 @@ impl DynamicTool {
                 if output.status.success() {
                     ToolResult::success(String::from_utf8_lossy(&output.stdout).to_string())
                 } else {
-                    ToolResult::error(format!(
-                        "Command failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    ))
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let exit_code = output
+                        .status
+                        .code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let error_msg = if stdout.is_empty() && stderr.is_empty() {
+                        format!("Command failed with exit code {}", exit_code)
+                    } else {
+                        let mut msg = String::new();
+                        if !stdout.is_empty() {
+                            msg.push_str(&format!("stdout: {}\n", stdout.trim_end()));
+                        }
+                        if !stderr.is_empty() {
+                            msg.push_str(&format!("stderr: {}\n", stderr.trim_end()));
+                        }
+                        msg.push_str(&format!("exit code: {}", exit_code));
+                        msg
+                    };
+                    ToolResult::error(format!("Command failed: {}", error_msg))
                 }
             }
             Err(e) => ToolResult::error(format!("Failed to execute command: {}", e)),
@@ -324,8 +341,6 @@ fn user_tools_dir() -> AnyResult<PathBuf> {
     path.push("tools");
     Ok(path)
 }
-
-
 
 #[cfg(test)]
 mod tests {

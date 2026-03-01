@@ -28,7 +28,6 @@ impl HeadlessUi {
     /// Create a new headless UI backend.
     /// Creates channels and spawns agent thread with system prompt.
     pub fn new(config: Config, prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
-
         // Determine profile based on app
         let profile_name = if app_name::get_app_name() == "plan-builder" {
             "task-agent".to_string()
@@ -88,16 +87,19 @@ impl HeadlessUi {
         system_prompt: Option<String>,
     ) -> ToolResult {
         // Try to create agent with profile first
-        let mut agent = match Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
-            Ok(agent) => agent,
-            Err(_) => {
-                // Fall back to generic agent
-                match Agent::new(self.config.clone(), self.workdir.clone()) {
-                    Ok(agent) => agent,
-                    Err(e) => return ToolResult::error(format!("Failed to create agent: {}", e)),
+        let mut agent =
+            match Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
+                Ok(agent) => agent,
+                Err(_) => {
+                    // Fall back to generic agent
+                    match Agent::new(self.config.clone(), self.workdir.clone()) {
+                        Ok(agent) => agent,
+                        Err(e) => {
+                            return ToolResult::error(format!("Failed to create agent: {}", e))
+                        }
+                    }
                 }
-            }
-        };
+            };
 
         // Apply custom system prompt if provided (overrides profile)
         if let Some(prompt) = system_prompt {

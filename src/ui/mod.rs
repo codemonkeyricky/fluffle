@@ -1,4 +1,3 @@
-
 pub mod agent_stack;
 pub mod app;
 pub mod bottom_pane;

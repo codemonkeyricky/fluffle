@@ -74,7 +74,12 @@ where
         }
     }
 
-    Args { headless, prompt, app, workdir }
+    Args {
+        headless,
+        prompt,
+        app,
+        workdir,
+    }
 }
 
 #[tokio::main]
@@ -125,13 +130,27 @@ mod tests {
 
     #[test]
     fn test_parse_args_app() {
-        let args = parse_args(vec!["nanocode".to_string(), "--app".to_string(), "testapp".to_string()].into_iter());
+        let args = parse_args(
+            vec![
+                "nanocode".to_string(),
+                "--app".to_string(),
+                "testapp".to_string(),
+            ]
+            .into_iter(),
+        );
         assert_eq!(args.app, "testapp");
     }
 
     #[test]
     fn test_parse_args_headless_with_prompt() {
-        let args = parse_args(vec!["nanocode".to_string(), "-p".to_string(), "hello".to_string()].into_iter());
+        let args = parse_args(
+            vec![
+                "nanocode".to_string(),
+                "-p".to_string(),
+                "hello".to_string(),
+            ]
+            .into_iter(),
+        );
         assert!(args.headless);
         assert_eq!(args.prompt, Some("hello".to_string()));
         assert_eq!(args.app, "coding");
