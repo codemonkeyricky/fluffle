@@ -5,6 +5,7 @@
   "tools": [
     "explorer",
     "builder-agent", 
-    "task-agent"
+    "task-agent",
+    "planner"
   ]
 }
