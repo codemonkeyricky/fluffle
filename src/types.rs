@@ -7,6 +7,7 @@ pub struct ToolContext {
     pub working_directory: std::path::PathBuf,
     pub permissions: Vec<String>,
     pub agent_to_ui_tx: Option<mpsc::Sender<AgentToUi>>,
+    pub cid: Option<u64>,
 }
 
 #[derive(Debug)]

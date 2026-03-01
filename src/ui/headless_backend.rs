@@ -5,8 +5,10 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::types::ToolResult;
+use crate::ui::agent_stack::NEXT_CID;
 use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
+use std::sync::atomic::Ordering;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 
@@ -35,8 +37,10 @@ impl HeadlessUi {
             "generalist".to_string()
         };
 
+        // Generate unique CID for this agent
+        let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         // Try to create agent with profile, fall back to generic agent
-        let agent = match Agent::new_with_profile(&profile_name, config.clone(), workdir.clone()) {
+        let mut agent = match Agent::new_with_profile(&profile_name, config.clone(), workdir.clone()) {
             Ok(agent) => agent,
             Err(_) => {
                 // Profile not found, fall back to generic agent with default system prompt
@@ -44,6 +48,8 @@ impl HeadlessUi {
                 agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?
             }
         };
+        agent.set_cid(cid);
+        agent.set_name(profile_name.clone());
 
         // Create channel for agent->UI updates
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
@@ -86,6 +92,8 @@ impl HeadlessUi {
         description: String,
         system_prompt: Option<String>,
     ) -> ToolResult {
+        // Generate unique CID for this agent
+        let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         // Try to create agent with profile first
         let mut agent =
             match Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
@@ -100,11 +108,17 @@ impl HeadlessUi {
                     }
                 }
             };
+        agent.set_cid(cid);
+        agent.set_name(name.clone());
 
         // Apply custom system prompt if provided (overrides profile)
         if let Some(prompt) = system_prompt {
             match agent.with_system_prompt(Some(prompt)) {
-                Ok(subagent) => agent = subagent,
+                Ok(mut subagent) => {
+                    subagent.set_cid(cid);
+                    subagent.set_name(name.clone());
+                    agent = subagent;
+                }
                 Err(e) => return ToolResult::error(format!("Failed to set system prompt: {}", e)),
             }
         }

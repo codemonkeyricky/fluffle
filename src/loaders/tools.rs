@@ -359,6 +359,7 @@ mod tests {
             working_directory: PathBuf::from("/tmp"),
             permissions: vec![],
             agent_to_ui_tx: None,
+            cid: None,
         };
         let result = render_command(template, &params, &ctx, &[]).unwrap();
         assert_eq!(result, "Hello world! Count: 5, flag: true");
@@ -372,6 +373,7 @@ mod tests {
             working_directory: PathBuf::from("/tmp"),
             permissions: vec![],
             agent_to_ui_tx: None,
+            cid: None,
         };
         // missing placeholder should remain unchanged
         let result = render_command(template, &params, &ctx, &[]).unwrap();
@@ -386,6 +388,7 @@ mod tests {
             working_directory: PathBuf::from("/tmp"),
             permissions: vec![],
             agent_to_ui_tx: None,
+            cid: None,
         };
         let result = render_command(template, &params, &ctx, &[]);
         assert!(result.is_err());
@@ -402,6 +405,7 @@ mod tests {
             working_directory: PathBuf::from("/base"),
             permissions: vec![],
             agent_to_ui_tx: None,
+            cid: None,
         };
         let secure_params = vec!["path".to_string()];
         let result = render_command(template, &params, &ctx, &secure_params).unwrap();
@@ -419,6 +423,7 @@ mod tests {
             working_directory: PathBuf::from("/base"),
             permissions: vec![],
             agent_to_ui_tx: None,
+            cid: None,
         };
         let secure_params = vec!["path".to_string()];
         let result = render_command(template, &params, &ctx, &secure_params);

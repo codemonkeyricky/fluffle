@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{mpsc, oneshot};
 
 /// Global counter for assigning unique context IDs (CIDs) to agents.
-static NEXT_CID: AtomicU64 = AtomicU64::new(1);
+pub(crate) static NEXT_CID: AtomicU64 = AtomicU64::new(1);
 
 /// Handle to an active agent with its communication channels and metadata.
 pub struct AgentHandle {
@@ -33,8 +33,9 @@ impl AgentHandle {
         name: String,
         ui_to_agent_tx: mpsc::Sender<UiToAgent>,
         agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
+        cid: Option<u64>,
     ) -> Self {
-        let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
+        let cid = cid.unwrap_or_else(|| NEXT_CID.fetch_add(1, Ordering::Relaxed));
         Self {
             name,
             cid,
@@ -69,8 +70,9 @@ impl AgentStack {
         base_agent_name: String,
         base_tx: mpsc::Sender<UiToAgent>,
         base_rx: mpsc::Receiver<AgentToUi>,
+        cid: Option<u64>,
     ) -> Self {
-        let base_handle = AgentHandle::new(base_agent_name, base_tx, base_rx);
+        let base_handle = AgentHandle::new(base_agent_name, base_tx, base_rx, cid);
         Self {
             stack: vec![base_handle],
         }
@@ -83,9 +85,10 @@ impl AgentStack {
         name: String,
         tx: mpsc::Sender<UiToAgent>,
         rx: mpsc::Receiver<AgentToUi>,
+        cid: Option<u64>,
     ) -> oneshot::Receiver<ToolResult> {
         let (result_tx, result_rx) = oneshot::channel();
-        let mut handle = AgentHandle::new(name, tx, rx);
+        let mut handle = AgentHandle::new(name, tx, rx, cid);
         handle.set_child_result_tx(result_tx);
         self.stack.push(handle);
         result_rx
@@ -100,8 +103,9 @@ impl AgentStack {
         tx: mpsc::Sender<UiToAgent>,
         rx: mpsc::Receiver<AgentToUi>,
         result_tx: oneshot::Sender<ToolResult>,
+        cid: Option<u64>,
     ) {
-        let mut handle = AgentHandle::new(name, tx, rx);
+        let mut handle = AgentHandle::new(name, tx, rx, cid);
         handle.set_child_result_tx(result_tx);
         self.stack.push(handle);
     }
@@ -187,12 +191,12 @@ mod tests {
         NEXT_CID.store(1, Ordering::Relaxed);
         let (tx1, _) = mpsc::channel::<UiToAgent>(1);
         let (_, rx1) = mpsc::channel::<AgentToUi>(1);
-        let mut stack = AgentStack::new("generalist".to_string(), tx1, rx1);
+        let mut stack = AgentStack::new("generalist".to_string(), tx1, rx1, None);
         assert_eq!(stack.stack_display(), "generalist (cid 1)");
 
         let (tx2, _) = mpsc::channel::<UiToAgent>(1);
         let (_, rx2) = mpsc::channel::<AgentToUi>(1);
-        let _rx = stack.push("explorer".to_string(), tx2, rx2);
+        let _rx = stack.push("explorer".to_string(), tx2, rx2, None);
         assert_eq!(
             stack.stack_display(),
             "generalist (cid 1) -> explorer (cid 2)"
@@ -200,7 +204,7 @@ mod tests {
 
         let (tx3, _) = mpsc::channel::<UiToAgent>(1);
         let (_, rx3) = mpsc::channel::<AgentToUi>(1);
-        let _rx = stack.push("specialist".to_string(), tx3, rx3);
+        let _rx = stack.push("specialist".to_string(), tx3, rx3, None);
         assert_eq!(
             stack.stack_display(),
             "generalist (cid 1) -> explorer (cid 2) -> specialist (cid 3)"

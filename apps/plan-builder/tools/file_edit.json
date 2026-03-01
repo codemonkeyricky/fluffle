@@ -1,0 +1,28 @@
+{
+  "name": "file_edit",
+  "description": "Replace all occurrences of a literal string in a file",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "path": {
+        "type": "string",
+        "description": "Path to the file to edit"
+      },
+      "old_string": {
+        "type": "string",
+        "description": "Literal string to replace",
+        "minLength": 1
+      },
+      "new_string": {
+        "type": "string",
+        "description": "Replacement string"
+      }
+    },
+    "required": ["path", "old_string", "new_string"]
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "awk -v old='{{old_string}}' -v new='{{new_string}}' '{ while (i = index($0, old)) { $0 = substr($0, 1, i-1) new substr($0, i + length(old)) } print }' '{{path}}' > '{{path}}'.tmp && mv '{{path}}'.tmp '{{path}}'"
+  },
+  "secure_parameters": ["path"]
+}

@@ -165,6 +165,7 @@ mod tests {
             working_directory: PathBuf::from("."),
             permissions: vec![],
             agent_to_ui_tx: None,
+            cid: None,
         };
 
         let result = tool.execute(&ctx, json!({})).await;

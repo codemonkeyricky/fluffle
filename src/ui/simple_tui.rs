@@ -5,7 +5,8 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::types::ToolResult;
-use crate::ui::agent_stack::AgentStack;
+use crate::ui::agent_stack::{AgentStack, NEXT_CID};
+use std::sync::atomic::Ordering;
 use crate::ui::bottom_pane::BottomPane;
 use crate::ui::event::{Event, EventHandler};
 use crate::ui::render::Renderable;
@@ -137,16 +138,19 @@ impl SimpleTui {
 
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();
+        // Generate unique CID for base agent
+        let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         let ui_to_agent_tx = spawn_with_profile(
             config_clone,
             agent_to_ui_tx,
             workdir.clone(),
             Some(default_profile.clone()),
+            Some(cid),
         );
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
         // Create agent stack with base agent
-        let stack = AgentStack::new(default_profile, ui_to_agent_tx_clone, agent_to_ui_rx);
+        let stack = AgentStack::new(default_profile, ui_to_agent_tx_clone, agent_to_ui_rx, Some(cid));
         let agent_type = stack.stack_display();
 
         let event_handler = EventHandler::new(250);
@@ -552,8 +556,10 @@ impl SimpleTui {
         system_prompt: Option<String>,
         result_tx: oneshot::Sender<ToolResult>,
     ) -> Result<()> {
+        // Generate unique CID for this agent
+        let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         // Create agent based on profile name or system prompt
-        let agent = if let Ok(profile_agent) =
+        let mut agent = if let Ok(profile_agent) =
             crate::Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone())
         {
             profile_agent
@@ -565,14 +571,17 @@ impl SimpleTui {
             }
             agent
         };
+        // Set CID and name on agent
+        agent.set_cid(cid);
+        agent.set_name(name.clone());
 
         // Create channel pair for child agent
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
         let ui_to_agent_tx = crate::agent_thread::spawn_with_agent(agent, agent_to_ui_tx);
 
-        // Push child onto stack with provided result channel
+        // Push child onto stack with provided result channel and CID
         self.stack
-            .push_with_result_tx(name.clone(), ui_to_agent_tx, agent_to_ui_rx, result_tx);
+            .push_with_result_tx(name.clone(), ui_to_agent_tx, agent_to_ui_rx, result_tx, Some(cid));
 
         // Send the task description to the child agent
         if let Some(child_tx) = self.stack.current_tx() {

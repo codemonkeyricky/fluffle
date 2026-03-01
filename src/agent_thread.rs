@@ -16,7 +16,7 @@ pub fn spawn(
     ui_tx: mpsc::Sender<AgentToUi>,
     workdir: Option<PathBuf>,
 ) -> mpsc::Sender<UiToAgent> {
-    spawn_with_profile(config, ui_tx, workdir, None)
+    spawn_with_profile(config, ui_tx, workdir, None, None)
 }
 
 /// Create a new agent thread with a specific profile.
@@ -25,6 +25,7 @@ pub fn spawn_with_profile(
     ui_tx: mpsc::Sender<AgentToUi>,
     workdir: Option<PathBuf>,
     profile_name: Option<String>,
+    cid: Option<u64>,
 ) -> mpsc::Sender<UiToAgent> {
     let (agent_tx, agent_rx) = mpsc::channel(100);
 
@@ -53,6 +54,11 @@ pub fn spawn_with_profile(
                 }
             }
         };
+
+        // Set CID if provided
+        if let Some(cid) = cid {
+            agent.set_cid(cid);
+        }
 
         // Run agent; this will block until shutdown or channel closed
         if let Err(e) = agent.run().await {

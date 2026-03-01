@@ -5,6 +5,7 @@
   "tools": [
     "file_read",
     "file_write",
+    "file_edit",
     "file_list",
     "bash_exec",
     "git_status",

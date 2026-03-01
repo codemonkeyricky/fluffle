@@ -15,6 +15,8 @@ pub struct Agent {
     config: Config,
     tools: Vec<Arc<dyn crate::plugin::Tool>>,
     context: ToolContext,
+    cid: Option<u64>,
+    agent_name: Option<String>,
     ai_provider: Box<dyn AiProvider>,
     history: Vec<Message>,
     ui_to_agent_rx: Option<mpsc::Receiver<UiToAgent>>,
@@ -36,6 +38,7 @@ impl Agent {
             working_directory: wd,
             permissions: Vec::new(),
             agent_to_ui_tx: None,
+            cid: None,
         };
 
         // Create AI provider based on configuration
@@ -45,6 +48,8 @@ impl Agent {
             config,
             tools,
             context,
+            cid: None,
+            agent_name: None,
             ai_provider,
             history: Vec::new(),
             ui_to_agent_rx: None,
@@ -57,6 +62,7 @@ impl Agent {
     pub(crate) const SUPPRESSED_TOOLS: &'static [&'static str] = &[
         "file_read",
         "file_write",
+        "file_edit",
         "file_list",
         "bash_exec",
         "list_files",
@@ -233,7 +239,7 @@ impl Agent {
     }
 
     /// Log a message to agent.log file.
-    fn log_to_agent_file(&self, message: &str) {
+    pub(crate) fn log_to_agent_file(&self, message: &str) {
         use std::fs::OpenOptions;
         use std::io::Write;
         let timestamp = std::time::SystemTime::now()
@@ -241,10 +247,17 @@ impl Agent {
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let line = format!("[{}] {}", timestamp, message);
+        let filename = match self.cid {
+            Some(cid) => {
+                let name = self.agent_name.as_deref().unwrap_or("unknown");
+                format!("cid-{}-{}.log", cid, name)
+            }
+            None => "agent.log".to_string(),
+        };
         if let Ok(mut file) = OpenOptions::new()
             .create(true)
             .append(true)
-            .open("agent.log")
+            .open(filename)
         {
             let _ = writeln!(file, "{}", line);
         }
@@ -325,6 +338,8 @@ impl Agent {
             config: self.config.clone(),
             tools: self.tools.clone(),
             context: self.context.clone(),
+            cid: self.cid,
+            agent_name: self.agent_name.clone(),
             ai_provider,
             history,
             ui_to_agent_rx: None,
@@ -347,6 +362,8 @@ impl Agent {
             config: self.config.clone(),
             tools: self.tools.clone(),
             context,
+            cid: self.cid,
+            agent_name: self.agent_name.clone(),
             ai_provider,
             history: Vec::new(),
             ui_to_agent_rx: None,
@@ -359,6 +376,17 @@ impl Agent {
     /// This is useful for subagents that need to operate in a specific directory.
     pub fn set_context(&mut self, context: ToolContext) {
         self.context = context;
+    }
+
+    /// Set the agent's CID (context ID).
+    pub fn set_cid(&mut self, cid: u64) {
+        self.cid = Some(cid);
+        self.context.cid = Some(cid);
+    }
+
+    /// Set the agent's name.
+    pub fn set_name(&mut self, name: String) {
+        self.agent_name = Some(name);
     }
 
     /// Discover all tools registered via the plugin inventory.
