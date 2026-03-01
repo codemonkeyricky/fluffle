@@ -25,7 +25,7 @@ pub fn spawn_with_profile(
     ui_tx: mpsc::Sender<AgentToUi>,
     workdir: Option<PathBuf>,
     profile_name: Option<String>,
-    cid: Option<u64>,
+    _cid: Option<u64>,
 ) -> mpsc::Sender<UiToAgent> {
     let (agent_tx, agent_rx) = mpsc::channel(100);
 
@@ -56,7 +56,7 @@ pub fn spawn_with_profile(
         };
 
         // Set CID if provided
-        if let Some(cid) = cid {
+        if let Some(cid) = _cid {
             agent.set_cid(cid);
         }
 
