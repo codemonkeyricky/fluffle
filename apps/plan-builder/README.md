@@ -15,12 +15,13 @@ This app provides two specialized agents for breaking down plans into tasks and 
 
 ### Builder Agent (`builder-agent`)
 
-- **Purpose**: Executes individual tasks using available tools.
-- **System Prompt**: Instructs the agent to perform tasks step‑by‑step, verify success, and report completion.
+- **Purpose**: Executes individual tasks using available tools, with validation criteria.
+- **System Prompt**: Instructs the agent to perform tasks step‑by‑step, verify success, run validation, and report completion status. Includes guidance for parsing validation criteria from the task description.
 - **Tools**:
   - `file_read`, `file_write`, `file_list`: File operations.
   - `bash_exec`: Execute shell commands.
   - `git_status`, `git_diff`: Git operations.
+- **Validation**: The agent receives validation criteria along with the task description (separated by "Validation criteria:"). It must run validation after implementation and report success/failure.
 
 ## Workflow
 
@@ -28,8 +29,8 @@ This app provides two specialized agents for breaking down plans into tasks and 
 2. Provide a high‑level plan (e.g., “Create a simple web server with Express.js”).
 3. The task agent will:
    - Analyze the plan and identify required tasks.
-    - For each task, call the `builder-agent` tool with a clear description.
-   - Each delegation spawns a **builder agent** that executes the task and returns a result.
+    - For each task, call the `builder-agent` tool with a clear description including validation criteria (using 'Validation criteria:' separator).
+    - Each delegation spawns a **builder agent** that executes the task, runs validation, and returns a result.
    - Wait for the builder agent to finish before proceeding.
    - If a task fails, decide whether to retry, adjust, or abort.
 4. After all tasks are completed, the task agent provides a final summary.

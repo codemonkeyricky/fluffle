@@ -1,4 +1,4 @@
-use crate::agent_thread::{spawn, spawn_with_profile};
+use crate::agent_thread::spawn_with_profile;
 use crate::ai::TokenUsage;
 use crate::app_name;
 use crate::config::Config;

@@ -5,12 +5,18 @@
 
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::types::ToolResult;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{mpsc, oneshot};
+
+/// Global counter for assigning unique context IDs (CIDs) to agents.
+static NEXT_CID: AtomicU64 = AtomicU64::new(1);
 
 /// Handle to an active agent with its communication channels and metadata.
 pub struct AgentHandle {
     /// Agent profile name (e.g., "generalist", "explorer").
     pub name: String,
+    /// Context ID (CID) – unique numeric identifier for this agent instance.
+    pub cid: u64,
     /// Sender for UI-to-agent messages (UI uses this to send events to agent).
     pub ui_to_agent_tx: mpsc::Sender<UiToAgent>,
     /// Receiver for agent-to-UI messages (UI receives agent responses from this).
@@ -28,8 +34,10 @@ impl AgentHandle {
         ui_to_agent_tx: mpsc::Sender<UiToAgent>,
         agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
     ) -> Self {
+        let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         Self {
             name,
+            cid,
             ui_to_agent_tx,
             agent_to_ui_rx,
             child_result_tx: None,
@@ -152,7 +160,7 @@ impl AgentStack {
     pub fn stack_display(&self) -> String {
         self.stack
             .iter()
-            .map(|handle| handle.name.as_str())
+            .map(|handle| format!("{} (cid {})", handle.name, handle.cid))
             .collect::<Vec<_>>()
             .join(" -> ")
     }
@@ -172,32 +180,39 @@ impl AgentStack {
 mod tests {
     use super::*;
     use crate::messaging::{AgentToUi, UiToAgent};
-    use tokio::sync::{mpsc, oneshot};
+    use tokio::sync::mpsc;
 
     #[test]
     fn test_stack_display() {
+        NEXT_CID.store(1, Ordering::Relaxed);
         let (tx1, _) = mpsc::channel::<UiToAgent>(1);
         let (_, rx1) = mpsc::channel::<AgentToUi>(1);
         let mut stack = AgentStack::new("generalist".to_string(), tx1, rx1);
-        assert_eq!(stack.stack_display(), "generalist");
+        assert_eq!(stack.stack_display(), "generalist (cid 1)");
 
         let (tx2, _) = mpsc::channel::<UiToAgent>(1);
         let (_, rx2) = mpsc::channel::<AgentToUi>(1);
         let _rx = stack.push("explorer".to_string(), tx2, rx2);
-        assert_eq!(stack.stack_display(), "generalist -> explorer");
+        assert_eq!(
+            stack.stack_display(),
+            "generalist (cid 1) -> explorer (cid 2)"
+        );
 
         let (tx3, _) = mpsc::channel::<UiToAgent>(1);
         let (_, rx3) = mpsc::channel::<AgentToUi>(1);
         let _rx = stack.push("specialist".to_string(), tx3, rx3);
         assert_eq!(
             stack.stack_display(),
-            "generalist -> explorer -> specialist"
+            "generalist (cid 1) -> explorer (cid 2) -> specialist (cid 3)"
         );
 
         stack.pop(None);
-        assert_eq!(stack.stack_display(), "generalist -> explorer");
+        assert_eq!(
+            stack.stack_display(),
+            "generalist (cid 1) -> explorer (cid 2)"
+        );
 
         stack.pop(None);
-        assert_eq!(stack.stack_display(), "generalist");
+        assert_eq!(stack.stack_display(), "generalist (cid 1)");
     }
 }

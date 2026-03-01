@@ -24,10 +24,6 @@ pub fn load_profiles() -> Result<()> {
         return Ok(());
     }
 
-    println!(
-        "[DEBUG] Loading profiles for app: {}",
-        app_name::get_app_name()
-    );
     let mut registry = PROFILE_REGISTRY.write().map_err(|e| {
         Error::Agent(format!(
             "Failed to acquire write lock on profile registry: {}",
@@ -45,17 +41,13 @@ pub fn load_profiles() -> Result<()> {
         tracing::debug!("Built-in dir exists, loading profiles");
         load_profiles_from_dir(&builtin_dir, &mut registry)?;
     } else {
-        println!("[DEBUG] Built-in dir does not exist");
     }
 
     // Load user profiles (override built-in ones)
     let user_dir = user_profiles_dir()?;
-    println!("[DEBUG] User profiles dir: {:?}", user_dir);
     if user_dir.exists() {
-        println!("[DEBUG] User dir exists, loading profiles");
         load_profiles_from_dir(&user_dir, &mut registry)?;
     } else {
-        println!("[DEBUG] User dir does not exist");
     }
 
     PROFILES_LOADED.store(true, Ordering::SeqCst);
