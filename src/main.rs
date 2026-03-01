@@ -11,6 +11,8 @@ struct Args {
     prompt: Option<String>,
     #[structopt(long, default_value = "coding", help = "App name (e.g., coding)")]
     app: String,
+    #[structopt(long, help = "Working directory for tool execution")]
+    workdir: Option<PathBuf>,
 }
 
 fn parse_args<I>(args: I) -> Args
@@ -21,6 +23,7 @@ where
     let mut headless = false;
     let mut prompt: Option<String> = None;
     let mut app = "coding".to_string();
+    let mut workdir: Option<PathBuf> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -35,6 +38,14 @@ where
                 i += 2;
             } else {
                 eprintln!("Error: --app requires an argument");
+                std::process::exit(1);
+            }
+        } else if args[i] == "--workdir" {
+            if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+                workdir = Some(PathBuf::from(args[i + 1].clone()));
+                i += 2;
+            } else {
+                eprintln!("Error: --workdir requires an argument");
                 std::process::exit(1);
             }
         } else if args[i] == "-p" || args[i] == "--headless" {
@@ -56,13 +67,14 @@ where
             println!("    -h, --headless    Run in headless mode (stdout/stdin)");
             println!("    -p, --prompt P    Prompt for headless mode");
             println!("        --app APP     App name (e.g., coding) [default: coding]");
+            println!("        --workdir DIR Working directory for tool execution");
             std::process::exit(0);
         } else {
             i += 1;
         }
     }
 
-    Args { headless, prompt, app }
+    Args { headless, prompt, app, workdir }
 }
 
 #[tokio::main]
@@ -95,7 +107,7 @@ async fn main() -> Result<()> {
     }
     let config = Config::load().await?;
 
-    let mut ui = create_ui(config, args.headless, args.prompt).await?;
+    let mut ui = create_ui(config, args.headless, args.prompt, args.workdir).await?;
     ui.run().await
 }
 

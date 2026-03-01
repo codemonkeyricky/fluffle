@@ -24,6 +24,7 @@ use ratatui::{
     Terminal,
 };
 use std::io;
+use std::path::PathBuf;
 use tokio::sync::{mpsc, oneshot};
 
 /// Guard that ensures terminal state is restored when dropped.
@@ -91,6 +92,8 @@ pub struct SimpleTui {
     stack: AgentStack,
     /// Configuration for spawning child agents.
     config: Config,
+    /// Working directory for tool execution.
+    workdir: Option<PathBuf>,
     /// Event handler for user input.
     event_handler: EventHandler,
     /// Bottom pane with input composer.
@@ -117,7 +120,7 @@ pub struct SimpleTui {
 impl SimpleTui {
     /// Create a new simple terminal UI backend.
     /// Sets up terminal, creates channels, spawns agent thread.
-    pub async fn new(config: Config) -> Result<Self> {
+    pub async fn new(config: Config, workdir: Option<PathBuf>) -> Result<Self> {
         // Setup terminal
         let guard = TerminalGuard::setup()?;
 
@@ -126,7 +129,7 @@ impl SimpleTui {
 
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();
-        let ui_to_agent_tx = spawn(config_clone, agent_to_ui_tx);
+        let ui_to_agent_tx = spawn(config_clone, agent_to_ui_tx, workdir.clone());
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
         // Create agent stack with base agent
@@ -148,6 +151,7 @@ impl SimpleTui {
             guard,
             stack,
             config,
+            workdir,
             event_handler,
             bottom_pane,
             log_lines: Vec::new(),
@@ -541,11 +545,11 @@ impl SimpleTui {
     ) -> Result<()> {
         // Create agent based on profile name or system prompt
         let agent =
-            if let Ok(profile_agent) = crate::Agent::new_with_profile(&name, self.config.clone()) {
+            if let Ok(profile_agent) = crate::Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
                 profile_agent
             } else {
                 // Create generic agent with optional system prompt
-                let mut agent = crate::Agent::new(self.config.clone())?;
+                let mut agent = crate::Agent::new(self.config.clone(), self.workdir.clone())?;
                 if let Some(prompt) = system_prompt {
                     agent = agent.with_system_prompt(Some(prompt))?;
                 }

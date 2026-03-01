@@ -14,7 +14,7 @@ async fn test_agent_creation_and_structure() {
     };
 
     // Create agent - this should succeed
-    let agent = Agent::new(config).expect("Agent initialization failed");
+    let agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // Verify agent has tools (discovered from plugins)
     let tools = agent.tools();
@@ -49,7 +49,7 @@ async fn test_agent_process_method_exists() {
     };
 
     // Create agent
-    let mut agent = Agent::new(config).expect("Agent initialization failed");
+    let mut agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // Test that process() method exists and can be called
     // It will fail due to missing API key, but that's OK for this test
@@ -85,7 +85,7 @@ async fn test_agent_tools_access() {
         max_tool_iterations: 10,
     };
 
-    let agent = Agent::new(config).expect("Agent initialization failed");
+    let agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // Verify we can access tools
     let tools = agent.tools();
@@ -117,7 +117,7 @@ async fn test_agent_conversation_history_management() {
         max_tool_iterations: 10,
     };
 
-    let mut agent = Agent::new(config).expect("Agent initialization failed");
+    let mut agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // Initial history should be empty
     assert!(agent.history().is_empty());
@@ -153,7 +153,7 @@ async fn test_agent_tool_conversion() {
         max_tool_iterations: 10,
     };
 
-    let _agent = Agent::new(config).expect("Agent initialization failed");
+    let _agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // This is an internal method, but we can test it indirectly through process()
     // or we could make it public for testing. For now, just verify agent creation.
@@ -176,7 +176,7 @@ async fn test_agent_process_handles_iterative_tool_calls() {
         max_tool_iterations: 10,
     };
 
-    let agent = Agent::new(config).expect("Agent initialization failed");
+    let agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // We can't easily test iterative behavior without mocking
     // For now, just verify agent accepts the new config field
@@ -198,7 +198,7 @@ async fn test_agent_preserves_tool_error_messages_in_history() {
         max_tool_iterations: 3, // Small limit for test
     };
 
-    let agent = Agent::new(config).expect("Agent initialization failed");
+    let agent = Agent::new(config, None).expect("Agent initialization failed");
 
     // Can't easily test without mocking AI provider and tools
     // But we can verify the config is accepted

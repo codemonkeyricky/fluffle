@@ -24,7 +24,7 @@ pub struct StatusInfo {
 impl App {
     pub async fn new(config: Config, ui_to_agent_tx: mpsc::Sender<UiToAgent>) -> Result<Self> {
         // Create temporary agent to get tool count for status
-        let agent = Agent::new(config.clone())?;
+        let agent = Agent::new(config.clone(), None)?;
         let status = StatusInfo {
             model: config.model,
             provider: config.provider,

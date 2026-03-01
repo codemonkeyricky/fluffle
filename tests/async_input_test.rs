@@ -121,7 +121,7 @@ mod tests {
             max_tool_iterations: 10,
         };
 
-        let agent = Agent::new(config).expect("Agent creation failed");
+        let agent = Agent::new(config, None).expect("Agent creation failed");
         let _agent_wrapped = Arc::new(RwLock::new(agent));
 
         // Can't easily test full App::new() due to config loading

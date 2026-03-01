@@ -7,6 +7,7 @@ use crate::profile_loader;
 use crate::types::{ToolContext, ToolResult};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -22,13 +23,17 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: Config, working_directory: Option<PathBuf>) -> Result<Self> {
         // Discover tools from inventory
         let tools = Self::discover_tools();
 
         // Create default context (current directory, empty permissions)
+        let wd = match working_directory {
+            Some(path) => path,
+            None => std::env::current_dir().map_err(|e| crate::error::Error::Io(e))?,
+        };
         let context = crate::types::ToolContext {
-            working_directory: std::env::current_dir().map_err(|e| crate::error::Error::Io(e))?,
+            working_directory: wd,
             permissions: Vec::new(),
             agent_to_ui_tx: None,
         };
@@ -66,21 +71,22 @@ impl Agent {
         config: Config,
         agent_to_ui_tx: mpsc::Sender<AgentToUi>,
         ui_to_agent_rx: mpsc::Receiver<UiToAgent>,
+        working_directory: Option<PathBuf>,
     ) -> Result<Self> {
-        let mut agent = Self::new(config)?;
+        let mut agent = Self::new(config, working_directory)?;
         agent.context.agent_to_ui_tx = Some(agent_to_ui_tx);
         agent.ui_to_agent_rx = Some(ui_to_agent_rx);
         Ok(agent)
     }
 
     /// Create agent with a specific profile
-    pub fn new_with_profile(profile_name: &str, config: Config) -> Result<Self> {
+    pub fn new_with_profile(profile_name: &str, config: Config, working_directory: Option<PathBuf>) -> Result<Self> {
         let profile = profile_loader::get_profile(profile_name).ok_or_else(|| {
             crate::error::Error::Agent(format!("Profile not found: {}", profile_name))
         })?;
 
         // Create base agent
-        let mut agent = Self::new(config)?;
+        let mut agent = Self::new(config, working_directory)?;
 
         // Apply profile configuration
         agent.apply_profile(&profile)?;
@@ -626,7 +632,7 @@ mod tests {
         };
 
         // This should succeed without panicking
-        let agent = Agent::new(config).expect("Agent initialization failed");
+        let agent = Agent::new(config, None).expect("Agent initialization failed");
 
         // Verify that tools were discovered (there should be some from plugins)
         assert!(
@@ -649,7 +655,7 @@ mod tests {
             max_tool_iterations: 10,
         };
 
-        let agent = Agent::new(config.clone()).expect("Agent initialization failed");
+        let agent = Agent::new(config.clone(), None).expect("Agent initialization failed");
 
         // Verify config is stored correctly
         let stored_config = agent.config();
@@ -703,7 +709,7 @@ mod tests {
             max_tool_iterations: 10,
         };
 
-        let agent = Agent::new(config).expect("Agent initialization failed");
+        let agent = Agent::new(config, None).expect("Agent initialization failed");
         let tool_names: Vec<&str> = agent.tools().iter().map(|t| t.name()).collect();
 
         // Should have at least file_ops, bash_exec, git_ops, task, explorer
@@ -722,7 +728,7 @@ mod tests {
             max_tool_iterations: 10,
         };
 
-        let agent = Agent::new(config).expect("Agent initialization failed");
+        let agent = Agent::new(config, None).expect("Agent initialization failed");
         let system_prompt = Some("You are a helpful assistant".to_string());
 
         let subagent = agent
@@ -756,7 +762,7 @@ mod tests {
         };
 
         // Create agent with explorer profile
-        let agent = Agent::new_with_profile("explorer", config.clone())
+        let agent = Agent::new_with_profile("explorer", config.clone(), None)
             .expect("Failed to create agent with profile");
 
         // Should have filtered tools (only those listed in explorer profile)

@@ -107,7 +107,7 @@ impl TaskTool {
         };
 
         // Create base agent
-        let mut agent = match crate::Agent::new(config) {
+        let mut agent = match crate::Agent::new(config, None) {
             Ok(agent) => agent,
             Err(e) => return ToolResult::error(format!("Failed to create agent: {}", e)),
         };

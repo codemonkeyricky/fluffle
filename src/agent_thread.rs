@@ -6,18 +6,19 @@
 use crate::agent::Agent;
 use crate::config::Config;
 use crate::messaging::{AgentToUi, UiToAgent};
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 /// Create a new agent thread with the given configuration and channels.
 /// Spawns the agent task and returns a handle to send requests.
-pub fn spawn(config: Config, ui_tx: mpsc::Sender<AgentToUi>) -> mpsc::Sender<UiToAgent> {
+pub fn spawn(config: Config, ui_tx: mpsc::Sender<AgentToUi>, workdir: Option<PathBuf>) -> mpsc::Sender<UiToAgent> {
     let (agent_tx, agent_rx) = mpsc::channel(100);
 
     // Clone ui_tx for error reporting before moving into agent
     let ui_tx_clone = ui_tx.clone();
     tokio::spawn(async move {
         // Create agent with both channels
-        let mut agent = match Agent::new_with_channels(config, ui_tx, agent_rx) {
+        let mut agent = match Agent::new_with_channels(config, ui_tx, agent_rx, workdir) {
             Ok(agent) => agent,
             Err(e) => {
                 let _ = ui_tx_clone.send(AgentToUi::Error(e.to_string())).await;

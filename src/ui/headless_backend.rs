@@ -6,6 +6,7 @@ use crate::messaging::{AgentToUi, UiToAgent};
 use crate::types::ToolResult;
 use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access to tools. Use tools to accomplish tasks when appropriate. When the user asks to explore or analyze a codebase, use the explorer tool.";
@@ -18,14 +19,16 @@ pub struct HeadlessUi {
     config: Config,
     /// Optional initial prompt to send immediately.
     prompt: Option<String>,
+    /// Working directory for tool execution.
+    workdir: Option<PathBuf>,
 }
 
 impl HeadlessUi {
     /// Create a new headless UI backend.
     /// Creates channels and spawns agent thread with system prompt.
-    pub fn new(config: Config, prompt: Option<String>) -> Result<Self> {
+    pub fn new(config: Config, prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
         // Create agent with system prompt
-        let agent = Agent::new(config.clone())?;
+        let agent = Agent::new(config.clone(), workdir.clone())?;
         let agent = agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?;
 
         // Create channel for agent->UI updates
@@ -43,6 +46,7 @@ impl HeadlessUi {
             channels,
             config,
             prompt,
+            workdir,
         })
     }
 
@@ -69,11 +73,11 @@ impl HeadlessUi {
         system_prompt: Option<String>,
     ) -> ToolResult {
         // Try to create agent with profile first
-        let mut agent = match Agent::new_with_profile(&name, self.config.clone()) {
+        let mut agent = match Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
             Ok(agent) => agent,
             Err(_) => {
                 // Fall back to generic agent
-                match Agent::new(self.config.clone()) {
+                match Agent::new(self.config.clone(), self.workdir.clone()) {
                     Ok(agent) => agent,
                     Err(e) => return ToolResult::error(format!("Failed to create agent: {}", e)),
                 }
