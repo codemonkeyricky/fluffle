@@ -134,7 +134,6 @@ impl SimpleTui {
         } else {
             "generalist".to_string()
         };
-        eprintln!("[DEBUG] Using profile: {}", default_profile);
 
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();

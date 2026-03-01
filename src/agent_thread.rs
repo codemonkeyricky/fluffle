@@ -22,7 +22,6 @@ pub fn spawn_with_profile(
     workdir: Option<PathBuf>,
     profile_name: Option<String>,
 ) -> mpsc::Sender<UiToAgent> {
-    eprintln!("[DEBUG] spawn_with_profile, profile_name: {:?}", profile_name);
     let (agent_tx, agent_rx) = mpsc::channel(100);
 
     // Clone ui_tx for error reporting before moving into agent

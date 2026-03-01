@@ -140,6 +140,7 @@ mod tests {
     #[test]
     fn test_profile_tool_creation() {
         profile_loader::clear_profiles();
+        crate::app_name::set_app_name("coding");
         let plugin = AgentProfilePlugin;
         let tools = plugin.tools();
         // Should have at least generalist and explorer

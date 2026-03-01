@@ -711,6 +711,8 @@ mod tests {
 
     #[test]
     fn test_agent_discovers_task_and_explore_tools() {
+        crate::profile_loader::clear_profiles();
+        crate::app_name::set_app_name("coding");
         let config = Config {
             model: "gpt-4".to_string(),
             api_key: None,
@@ -761,6 +763,7 @@ mod tests {
         use crate::profile_loader;
         // Ensure profiles are loaded
         profile_loader::clear_profiles();
+        crate::app_name::set_app_name("coding");
         profile_loader::load_profiles().expect("Failed to load profiles");
 
         let config = Config {
