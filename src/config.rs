@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 fn default_max_tool_iterations() -> u32 {
-    50
+    100
 }
 
 #[derive(Debug, Deserialize, Clone)]

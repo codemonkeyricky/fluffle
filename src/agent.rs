@@ -254,11 +254,7 @@ impl Agent {
             }
             None => "agent.log".to_string(),
         };
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(filename)
-        {
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(filename) {
             let _ = writeln!(file, "{}", line);
         }
     }

@@ -1,0 +1,18 @@
+{
+  "name": "worker",
+  "description": "Worker agent that executes a single, targeted task with clear requirement and validation criteria",
+  "system_prompt": "You are a worker agent responsible for executing tasks with validation criteria. You will receive a task description and validation criteria. You will continue to work on task until it is completed and passing validation criteria.",
+  "tools": [
+    "file_read",
+    "file_write",
+    "file_edit",
+    "file_list",
+    "bash_exec",
+    "git_status",
+    "git_diff"
+  ],
+  "config_overrides": {
+    "temperature": 0.2,
+    "max_tool_iterations": 30
+  }
+}

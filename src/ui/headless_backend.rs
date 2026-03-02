@@ -8,8 +8,8 @@ use crate::types::ToolResult;
 use crate::ui::agent_stack::NEXT_CID;
 use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
-use std::sync::atomic::Ordering;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
 
 const HEADLESS_SYSTEM_PROMPT: &str = "You are an AI coding assistant with access to tools. Use tools to accomplish tasks when appropriate. When the user asks to explore or analyze a codebase, use the explorer tool.";
@@ -40,14 +40,15 @@ impl HeadlessUi {
         // Generate unique CID for this agent
         let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         // Try to create agent with profile, fall back to generic agent
-        let mut agent = match Agent::new_with_profile(&profile_name, config.clone(), workdir.clone()) {
-            Ok(agent) => agent,
-            Err(_) => {
-                // Profile not found, fall back to generic agent with default system prompt
-                let agent = Agent::new(config.clone(), workdir.clone())?;
-                agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?
-            }
-        };
+        let mut agent =
+            match Agent::new_with_profile(&profile_name, config.clone(), workdir.clone()) {
+                Ok(agent) => agent,
+                Err(_) => {
+                    // Profile not found, fall back to generic agent with default system prompt
+                    let agent = Agent::new(config.clone(), workdir.clone())?;
+                    agent.with_system_prompt(Some(HEADLESS_SYSTEM_PROMPT.to_string()))?
+                }
+            };
         agent.set_cid(cid);
         agent.set_name(profile_name.clone());
 

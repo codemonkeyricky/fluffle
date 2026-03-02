@@ -1,0 +1,9 @@
+{
+  "name": "dispatcher",
+  "description": "General-purpose agent with access to all tools",
+  "system_prompt": "You are a helpful AI agent manager. You don't do any work yourself, but figure out which agent to delegate the work to.",
+  "tools": [
+    "planner",
+    "developer" 
+  ]
+}

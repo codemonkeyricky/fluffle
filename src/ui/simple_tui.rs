@@ -6,7 +6,6 @@ use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::types::ToolResult;
 use crate::ui::agent_stack::{AgentStack, NEXT_CID};
-use std::sync::atomic::Ordering;
 use crate::ui::bottom_pane::BottomPane;
 use crate::ui::event::{Event, EventHandler};
 use crate::ui::render::Renderable;
@@ -27,6 +26,7 @@ use ratatui::{
 };
 use std::io;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use tokio::sync::{mpsc, oneshot};
 
 /// Guard that ensures terminal state is restored when dropped.
@@ -130,11 +130,7 @@ impl SimpleTui {
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
 
         // Determine default profile based on app
-        let default_profile = if app_name::get_app_name() == "plan-builder" {
-            "task-agent".to_string()
-        } else {
-            "generalist".to_string()
-        };
+        let default_profile = "dispatcher".to_string();
 
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();
@@ -150,7 +146,12 @@ impl SimpleTui {
         let ui_to_agent_tx_clone = ui_to_agent_tx.clone();
 
         // Create agent stack with base agent
-        let stack = AgentStack::new(default_profile, ui_to_agent_tx_clone, agent_to_ui_rx, Some(cid));
+        let stack = AgentStack::new(
+            default_profile,
+            ui_to_agent_tx_clone,
+            agent_to_ui_rx,
+            Some(cid),
+        );
         let agent_type = stack.stack_display();
 
         let event_handler = EventHandler::new(250);
@@ -193,7 +194,7 @@ impl SimpleTui {
                     "Tokens used: prompt: {}, completion: {}, total: {}",
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
                 );
-                self.push_log(Line::from(text));
+                self.push_log(self.indented_line(vec![Span::raw(text)]));
                 return;
             }
         };
@@ -218,15 +219,15 @@ impl SimpleTui {
         // Split by newlines, add prefix only to first line.
         let lines: Vec<&str> = text.split('\n').collect();
         for (i, line) in lines.iter().enumerate() {
-            let styled_line = if prefix.is_empty() || i > 0 {
-                Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
+            let spans = if prefix.is_empty() || i > 0 {
+                vec![Span::styled(line.to_string(), Style::default().fg(color))]
             } else {
-                Line::from(vec![
+                vec![
                     Span::styled(prefix, Style::default().fg(color)),
                     Span::raw(line.to_string()),
-                ])
+                ]
             };
-            self.push_log(styled_line);
+            self.push_log(self.indented_line(spans));
         }
     }
 
@@ -261,6 +262,17 @@ impl SimpleTui {
     /// Clamp scroll offset using current viewport height.
     fn clamp_scroll_offset(&mut self) {
         self.clamp_scroll_offset_with_height(self.viewport_height as usize);
+    }
+
+    /// Create a line with indentation based on current stack depth.
+    fn indented_line(&self, spans: Vec<Span<'static>>) -> Line<'static> {
+        let indent = "  ".repeat(self.stack.len().saturating_sub(1));
+        let mut all_spans = Vec::new();
+        if !indent.is_empty() {
+            all_spans.push(Span::raw(indent));
+        }
+        all_spans.extend(spans);
+        Line::from(all_spans)
     }
 }
 
@@ -421,13 +433,13 @@ impl SimpleTui {
                             // Auto-scroll to see new message and response
                             self.auto_scroll = true;
                             // Add user input to log
-                            self.push_log(Line::from(vec![
+                            self.push_log(self.indented_line(vec![
                                 Span::styled("> ", Style::default().fg(Color::Cyan)),
                                 Span::raw(input.clone()),
                             ]));
                             // Send request to agent
                             if let Err(e) = self.send_to_agent(UiToAgent::Request(input)).await {
-                                self.push_log(Line::from(vec![
+                                self.push_log(self.indented_line(vec![
                                     Span::styled(
                                         "error sending request: ",
                                         Style::default().fg(Color::Red),
@@ -580,8 +592,13 @@ impl SimpleTui {
         let ui_to_agent_tx = crate::agent_thread::spawn_with_agent(agent, agent_to_ui_tx);
 
         // Push child onto stack with provided result channel and CID
-        self.stack
-            .push_with_result_tx(name.clone(), ui_to_agent_tx, agent_to_ui_rx, result_tx, Some(cid));
+        self.stack.push_with_result_tx(
+            name.clone(),
+            ui_to_agent_tx,
+            agent_to_ui_rx,
+            result_tx,
+            Some(cid),
+        );
 
         // Send the task description to the child agent
         if let Some(child_tx) = self.stack.current_tx() {
@@ -596,11 +613,6 @@ impl SimpleTui {
         // Update agent_type for UI display
         self.update_agent_type_from_stack();
 
-        Ok(())
-    }
-
-    async fn handle_agent_message(&mut self, msg: AgentToUi) -> Result<()> {
-        self.push_agent_message(msg);
         Ok(())
     }
 }
