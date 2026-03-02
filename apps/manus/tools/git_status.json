@@ -1,0 +1,14 @@
+{
+  "name": "git_status",
+  "description": "Show git status of the current repository",
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "git status"
+  },
+  "secure_parameters": []
+}
