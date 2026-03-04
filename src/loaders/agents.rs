@@ -56,7 +56,7 @@ impl Tool for ProfileTool {
     }
 
     fn parameters(&self) -> ToolParameters {
-        // Similar to task tool: description parameter
+        // Accept description, requirements, and validation_criteria for worker agents
         json!({
             "type": "object",
             "properties": {
@@ -64,6 +64,14 @@ impl Tool for ProfileTool {
                     "type": "string",
                     "description": "Task description for the subagent",
                     "default": ""
+                },
+                "requirements": {
+                    "type": "string",
+                    "description": "Detailed requirements for the task"
+                },
+                "validation_criteria": {
+                    "type": "string",
+                    "description": "Specific, testable validation criteria for the task"
                 }
             },
             "required": ["description"]
@@ -76,11 +84,27 @@ impl Tool for ProfileTool {
             Some(d) => d.to_string(),
             None => return ToolResult::error("Missing 'description' parameter"),
         };
+        let requirements = params
+            .get("requirements")
+            .and_then(|r| r.as_str())
+            .map(|s| s.to_string());
+        let validation_criteria = params
+            .get("validation_criteria")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Build JSON payload for worker agents
+        let payload = json!({
+            "description": description,
+            "requirements": requirements,
+            "validation_criteria": validation_criteria
+        });
+        let description_json = payload.to_string();
 
         // Get agent_to_ui_tx to send spawn request
         let Some(agent_to_ui_tx) = ctx.agent_to_ui_tx.as_ref() else {
             // Fallback to inline execution if no UI channel (e.g., headless mode)
-            return self.execute_inline(ctx, description).await;
+            return self.execute_inline(ctx, description_json).await;
         };
 
         // Create oneshot channel for result
@@ -89,7 +113,7 @@ impl Tool for ProfileTool {
         // Send SpawnChild request to UI
         let spawn_msg = AgentToUi::SpawnChild {
             name: self.profile.name.clone(),
-            description,
+            description: description_json,
             system_prompt: None, // profile already has system prompt
             result_tx,
         };
