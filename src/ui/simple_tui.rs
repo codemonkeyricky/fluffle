@@ -183,7 +183,14 @@ impl SimpleTui {
     fn push_agent_message(&mut self, msg: AgentToUi) {
         let (prefix, color) = match &msg {
             AgentToUi::ToolCall(_) => ("", Color::Gray),
-            AgentToUi::ToolResult(_) => ("", Color::Gray),
+            AgentToUi::ToolResult(text) => {
+                // Color tool results red if they start with "Error:" prefix
+                if text.starts_with("Error:") {
+                    ("", Color::Red)
+                } else {
+                    ("", Color::Gray)
+                }
+            },
             AgentToUi::Thinking(_) => ("Thinking: ", Color::Blue),
             AgentToUi::Response(_) => ("", Color::Green),
             AgentToUi::Error(_) => ("", Color::Red),
@@ -571,17 +578,29 @@ impl SimpleTui {
         // Generate unique CID for this agent
         let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         // Create agent based on profile name or system prompt
-        let mut agent = if let Ok(profile_agent) =
-            crate::Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone())
-        {
-            profile_agent
-        } else {
-            // Create generic agent with optional system prompt
-            let mut agent = crate::Agent::new(self.config.clone(), self.workdir.clone())?;
-            if let Some(prompt) = system_prompt {
-                agent = agent.with_system_prompt(Some(prompt))?;
+        let mut agent = match crate::Agent::new_with_profile(&name, self.config.clone(), self.workdir.clone()) {
+            Ok(profile_agent) => profile_agent,
+            Err(_) => {
+                // Fall back to generic agent
+                match crate::Agent::new(self.config.clone(), self.workdir.clone()) {
+                    Ok(mut agent) => {
+                        if let Some(prompt) = system_prompt {
+                            match agent.with_system_prompt(Some(prompt)) {
+                                Ok(subagent) => agent = subagent,
+                                Err(e) => {
+                                    let _ = result_tx.send(ToolResult::error(e.to_string()));
+                                    return Ok(());
+                                }
+                            }
+                        }
+                        agent
+                    }
+                    Err(e) => {
+                        let _ = result_tx.send(ToolResult::error(e.to_string()));
+                        return Ok(());
+                    }
+                }
             }
-            agent
         };
         // Set CID and name on agent
         agent.set_cid(cid);
@@ -602,12 +621,21 @@ impl SimpleTui {
 
         // Send the task description to the child agent
         if let Some(child_tx) = self.stack.current_tx() {
-            child_tx
-                .send(UiToAgent::Request(description))
-                .await
-                .map_err(|e| {
-                    crate::error::Error::Ai(format!("Failed to send request to child agent: {}", e))
-                })?;
+            if let Err(e) = child_tx.send(UiToAgent::Request(description)).await {
+                // Failed to send request to child agent
+                // Pop the child we just pushed (since it hasn't started yet)
+                if let Some(mut popped_handle) = self.stack.pop(None) {
+                    // Get the result channel back from the popped handle
+                    if let Some(result_tx) = popped_handle.take_child_result_tx() {
+                        let _ = result_tx.send(ToolResult::error(format!(
+                            "Failed to send request to child agent: {}",
+                            e
+                        )));
+                    }
+                    // Dropping popped_handle will close channels, causing agent thread to exit
+                }
+                return Ok(());
+            }
         }
 
         // Update agent_type for UI display

@@ -168,7 +168,12 @@ impl Ui for HeadlessUi {
                     println!("\x1b[90m{}\x1b[0m", text);
                 }
                 AgentToUi::ToolResult(text) => {
-                    println!("\x1b[90m{}\x1b[0m", text);
+                    // Print error tool results in red, others in gray
+                    if text.starts_with("Error:") {
+                        println!("\x1b[91m{}\x1b[0m", text);
+                    } else {
+                        println!("\x1b[90m{}\x1b[0m", text);
+                    }
                 }
                 AgentToUi::Thinking(text) => {
                     println!("\x1b[90mThinking: {}\x1b[0m", text);

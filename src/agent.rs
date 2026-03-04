@@ -567,6 +567,8 @@ impl Agent {
     }
 
     /// Helper to push tool result message to UI channel
+    /// Tool errors are sent as ToolResult (not Error) because they are recoverable
+    /// and shouldn't terminate the agent. Fatal agent errors use AgentToUi::Error.
     async fn push_tool_result(&self, tool_name: &str, success: bool, output: &str) {
         // Suppress successful results for certain tools to reduce noise
         // Errors are always shown
@@ -578,11 +580,9 @@ impl Agent {
             let prefix = if success { "Result:" } else { "Error:" };
             let msg = format!("{} {}", prefix, output);
             tracing::debug!("Pushing tool result: {}", msg);
-            let message = if success {
-                AgentToUi::ToolResult(msg)
-            } else {
-                AgentToUi::Error(msg)
-            };
+            // Always send as ToolResult, even for errors
+            // Tool errors are recoverable and shouldn't terminate the agent
+            let message = AgentToUi::ToolResult(msg);
             if let Err(e) = tx.send(message).await {
                 tracing::error!("Failed to send tool result to UI: {}", e);
             }
