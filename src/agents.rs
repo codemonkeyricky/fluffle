@@ -20,4 +20,9 @@ pub struct AgentProfile {
     /// Optional configuration overrides
     #[serde(default)]
     pub config_overrides: HashMap<String, Value>,
+
+    /// Optional JSON schema for tool parameters when this profile is used as a tool
+    /// If not provided, defaults to a simple description parameter
+    #[serde(default)]
+    pub tool_parameters: Option<Value>,
 }

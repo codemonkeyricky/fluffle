@@ -15,5 +15,16 @@
   "config_overrides": {
     "temperature": 0.1,
     "max_tool_iterations": 50
+  },
+  "tool_parameters": {
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "description": "Goal or problem statement",
+        "default": ""
+      }
+    },
+    "required": ["description"]
   }
 }

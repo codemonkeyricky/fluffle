@@ -5,5 +5,16 @@
   "tools": [
     "planner",
     "developer" 
-  ]
+  ],
+  "tool_parameters": {
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "description": "Goal or task description",
+        "default": ""
+      }
+    },
+    "required": ["description"]
+  }
 }

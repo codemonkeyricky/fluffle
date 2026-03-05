@@ -56,26 +56,21 @@ impl Tool for ProfileTool {
     }
 
     fn parameters(&self) -> ToolParameters {
-        // Accept description, requirements, and validation_criteria for worker agents
-        json!({
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "description": "Task description for the subagent",
-                    "default": ""
+        // Use profile-specific tool parameters if defined, otherwise default
+        match &self.profile.tool_parameters {
+            Some(schema) => schema.clone(),
+            None => json!({
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Task description for the subagent",
+                        "default": ""
+                    }
                 },
-                "requirements": {
-                    "type": "string",
-                    "description": "Detailed requirements for the task"
-                },
-                "validation_criteria": {
-                    "type": "string",
-                    "description": "Specific, testable validation criteria for the task"
-                }
-            },
-            "required": ["description"]
-        })
+                "required": ["description"]
+            }),
+        }
     }
 
     async fn execute(&self, ctx: &ToolContext, params: ToolParameters) -> ToolResult {

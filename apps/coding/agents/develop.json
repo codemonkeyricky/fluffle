@@ -8,5 +8,16 @@
   "config_overrides": {
     "temperature": 0.1,
     "max_tool_iterations": 100
+  },
+  "tool_parameters": {
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "description": "High-level plan description",
+        "default": ""
+      }
+    },
+    "required": ["description"]
   }
 }

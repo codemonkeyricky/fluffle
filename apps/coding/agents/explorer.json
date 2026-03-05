@@ -12,5 +12,16 @@
   "config_overrides": {
     "temperature": 0.2,
     "max_tool_iterations": 30
+  },
+  "tool_parameters": {
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "description": "Exploration goal or query",
+        "default": ""
+      }
+    },
+    "required": ["description"]
   }
 }

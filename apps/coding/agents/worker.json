@@ -14,5 +14,24 @@
   "config_overrides": {
     "temperature": 0.2,
     "max_tool_iterations": 30
+  },
+  "tool_parameters": {
+    "type": "object",
+    "properties": {
+      "description": {
+        "type": "string",
+        "description": "Task description for the subagent",
+        "default": ""
+      },
+      "requirements": {
+        "type": "string",
+        "description": "Detailed requirements for the task"
+      },
+      "validation_criteria": {
+        "type": "string",
+        "description": "Specific, testable validation criteria for the task"
+      }
+    },
+    "required": ["description", "requirements", "validation_criteria"]
   }
 }
