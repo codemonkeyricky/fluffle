@@ -11,21 +11,17 @@ This module implements the "planning with files" methodology using specialized a
 
 ### Planner
 - **Role**: Create, manage, and execute plans by delegating tasks to workers.
-- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `web_search`, `project_analysis`, `explorer`, `worker`
+- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `worker`
 - **Behavior**: Reads planning files to determine current phase and pending tasks, delegates tasks to workers with validation criteria, updates todos.md progress, monitors findings.md and progress.md, and removes stale findings.
 
 ### Worker
 - **Role**: Execute specific tasks delegated by the planner.
-- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `web_search`, `project_analysis`, `explorer`
+- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`
 - **Behavior**: Performs concrete implementation work, updates findings.md with discoveries, and logs detailed actions in progress.md. Does not modify todos.md.
 
 ## Tools
 
-All standard file operations tools are included. Additionally:
-
-- **`web_search`**: Search the web for information, documentation, and resources.
-- **`project_analysis`**: Analyze project structure, dependencies, and build systems.
-- **`explorer`**: Explore codebase structure and understand existing code.
+All standard file operations tools are included: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`.
 
 ## Workflow
 

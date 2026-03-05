@@ -9,10 +9,7 @@
     "file_list",
     "bash_exec",
     "git_status",
-    "git_diff",
-    "web_search",
-    "project_analysis",
-    "explorer"
+    "git_diff"
   ],
   "tool_parameters": {
     "type": "object",

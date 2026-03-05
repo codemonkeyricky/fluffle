@@ -10,9 +10,6 @@
     "bash_exec",
     "git_status",
     "git_diff",
-    "web_search",
-    "project_analysis",
-    "explorer",
     "worker"
   ],
   "tool_parameters": {
