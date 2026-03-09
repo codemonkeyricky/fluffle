@@ -10,7 +10,6 @@
     "bash_exec",
     "git_status",
     "git_diff",
-    "worker",
     "explorer",
     "loop"
   ],

@@ -17,7 +17,7 @@
   },
   "execution": {
     "type": "bash",
-    "command_template": "printf '%s' {{content}} > {{path}}"
+    "command_template": "printf '%s' '{{content}}' > {{path}}"
   },
-  "secure_parameters": ["path", "content"]
+  "secure_parameters": ["path"]
 }

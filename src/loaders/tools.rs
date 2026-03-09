@@ -63,6 +63,9 @@ pub struct DynamicToolDef {
     /// Optional list of parameter names that should be securely joined to working directory
     #[serde(default)]
     pub secure_parameters: Vec<String>,
+    /// Optional list of parameter names that should be passed through without shell escaping
+    #[serde(default)]
+    pub raw_parameters: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,18 +104,23 @@ fn render_command(
     params: &Value,
     ctx: &ToolContext,
     secure_parameters: &[String],
+    raw_parameters: &[String],
 ) -> AnyResult<String> {
     let mut result = template.to_string();
     let param_map = params
         .as_object()
         .context("Parameters must be a JSON object")?;
     let secure_set: HashSet<_> = secure_parameters.iter().collect();
+    let raw_set: HashSet<_> = raw_parameters.iter().collect();
 
     for (key, value) in param_map {
         let placeholder = format!("{{{{{}}}}}", key);
         let replacement = match value {
             Value::String(s) => {
-                if secure_set.contains(key) {
+                if raw_set.contains(key) {
+                    // Pass through without any escaping
+                    s.clone()
+                } else if secure_set.contains(key) {
                     // Securely join path to working directory
                     let secure_path = secure_join(&ctx.working_directory, s)
                         .map_err(|e| anyhow!("Failed to securely join path '{}': {}", s, e))?;
@@ -213,7 +221,7 @@ impl DynamicTool {
     ) -> ToolResult {
         // Render command template with parameters
         let command =
-            match render_command(command_template, &params, ctx, &self.def.secure_parameters) {
+            match render_command(command_template, &params, ctx, &self.def.secure_parameters, &self.def.raw_parameters) {
                 Ok(cmd) => cmd,
                 Err(e) => {
                     return ToolResult::error(format!("Failed to render command template: {}", e))
@@ -361,7 +369,7 @@ mod tests {
             agent_to_ui_tx: None,
             cid: None,
         };
-        let result = render_command(template, &params, &ctx, &[]).unwrap();
+        let result = render_command(template, &params, &ctx, &[], &[]).unwrap();
         assert_eq!(result, "Hello world! Count: 5, flag: true");
     }
 
@@ -376,7 +384,7 @@ mod tests {
             cid: None,
         };
         // missing placeholder should remain unchanged
-        let result = render_command(template, &params, &ctx, &[]).unwrap();
+        let result = render_command(template, &params, &ctx, &[], &[]).unwrap();
         assert_eq!(result, "Hello world! {{missing}}");
     }
 
@@ -390,7 +398,7 @@ mod tests {
             agent_to_ui_tx: None,
             cid: None,
         };
-        let result = render_command(template, &params, &ctx, &[]);
+        let result = render_command(template, &params, &ctx, &[], &[]);
         assert!(result.is_err());
     }
 
@@ -408,7 +416,7 @@ mod tests {
             cid: None,
         };
         let secure_params = vec!["path".to_string()];
-        let result = render_command(template, &params, &ctx, &secure_params).unwrap();
+        let result = render_command(template, &params, &ctx, &secure_params, &[]).unwrap();
         // On Unix, path separator is /
         assert_eq!(result, "cat /base/subdir/file.txt && echo value");
     }
@@ -426,7 +434,7 @@ mod tests {
             cid: None,
         };
         let secure_params = vec!["path".to_string()];
-        let result = render_command(template, &params, &ctx, &secure_params);
+        let result = render_command(template, &params, &ctx, &secure_params, &[]);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Path traversal") || err_msg.contains("path traversal"));

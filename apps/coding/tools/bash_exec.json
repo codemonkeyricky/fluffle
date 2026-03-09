@@ -15,5 +15,6 @@
     "type": "bash",
     "command_template": "{{command}}"
   },
-  "secure_parameters": []
+  "secure_parameters": [],
+  "raw_parameters": ["command"]
 }
