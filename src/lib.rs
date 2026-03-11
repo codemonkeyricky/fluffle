@@ -19,6 +19,7 @@
 pub mod agent;
 pub mod agent_thread;
 pub mod agents;
+pub mod debug_log;
 pub mod ai;
 pub mod app_name;
 pub mod config;

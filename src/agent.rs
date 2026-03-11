@@ -427,6 +427,16 @@ impl Agent {
     /// Tool execution errors are included in the conversation history, allowing
     /// the AI to see and respond to errors in subsequent iterations.
     pub async fn process(&mut self, user_message: &str) -> Result<String> {
+        // Log agent start with available tools
+        let tool_names: Vec<&str> = self.tools.iter().map(|t| t.name()).collect();
+        crate::debug_log::agent_start(
+            &self.context.working_directory,
+            self.agent_name.as_deref().unwrap_or("unknown"),
+            self.cid,
+            &tool_names,
+            user_message,
+        );
+
         // Add user message to conversation history
         self.history.push(Message::user(user_message));
         // Reset token usage for this request
@@ -482,6 +492,12 @@ impl Agent {
 
             // Push thinking output to UI if content is not empty
             if !ai_response.content.trim().is_empty() {
+                crate::debug_log::thinking(
+                    &self.context.working_directory,
+                    self.agent_name.as_deref().unwrap_or("unknown"),
+                    self.cid,
+                    &ai_response.content,
+                );
                 self.push_thinking(&ai_response.content).await;
             }
 
@@ -545,9 +561,34 @@ impl Agent {
                 serde_json::to_string_pretty(&tool_call.arguments)
                     .unwrap_or_else(|_| "{}".to_string())
             ));
+            crate::debug_log::tool_call(
+                &self.context.working_directory,
+                self.agent_name.as_deref().unwrap_or("unknown"),
+                self.cid,
+                &tool_call.name,
+                &tool_call.arguments,
+            );
 
-            // Execute the tool
+            // Execute the tool with timing
+            let start = std::time::Instant::now();
             let tool_result = self.execute_tool(tool_call).await;
+            let duration_ms = start.elapsed().as_millis();
+
+            let (success, output) = if tool_result.is_success() {
+                (true, tool_result.output().to_string())
+            } else {
+                (false, tool_result.error_message().unwrap_or("").to_string())
+            };
+            crate::debug_log::tool_result(
+                &self.context.working_directory,
+                self.agent_name.as_deref().unwrap_or("unknown"),
+                self.cid,
+                &tool_call.name,
+                success,
+                &output,
+                duration_ms,
+            );
+
             results.push((tool_call.clone(), tool_result));
         }
 

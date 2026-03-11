@@ -102,6 +102,14 @@ impl Tool for ProfileTool {
             return self.execute_inline(ctx, description_json).await;
         };
 
+        crate::debug_log::agent_spawn(
+            &ctx.working_directory,
+            "unknown",
+            ctx.cid,
+            &self.profile.name,
+            &description_json,
+        );
+
         // Create oneshot channel for result
         let (result_tx, result_rx) = oneshot::channel();
 
@@ -117,15 +125,40 @@ impl Tool for ProfileTool {
         }
 
         // Wait for child result
-        match result_rx.await {
+        let start = std::time::Instant::now();
+        let result = match result_rx.await {
             Ok(result) => result,
             Err(_) => ToolResult::error("Child agent result channel closed"),
-        }
+        };
+        let duration_ms = start.elapsed().as_millis();
+        let (success, output) = if result.is_success() {
+            (true, result.output().to_string())
+        } else {
+            (false, result.error_message().unwrap_or("").to_string())
+        };
+        crate::debug_log::agent_complete(
+            &ctx.working_directory,
+            "unknown",
+            ctx.cid,
+            &self.profile.name,
+            success,
+            &output,
+            duration_ms,
+        );
+        result
     }
 }
 
 impl ProfileTool {
     async fn execute_inline(&self, ctx: &ToolContext, description: String) -> ToolResult {
+        crate::debug_log::agent_spawn(
+            &ctx.working_directory,
+            "unknown",
+            ctx.cid,
+            &self.profile.name,
+            &description,
+        );
+
         // Load config (should match parent agent's config)
         let config = match Config::load().await {
             Ok(config) => config,
@@ -143,11 +176,28 @@ impl ProfileTool {
         // Set working directory from parent context
         agent.set_context(ctx.clone());
 
-        // Run the task
-        match agent.process(&description).await {
+        // Run the task with timing
+        let start = std::time::Instant::now();
+        let result = match agent.process(&description).await {
             Ok(summary) => ToolResult::success(summary),
             Err(e) => ToolResult::error(format!("Profile agent failed: {}", e)),
-        }
+        };
+        let duration_ms = start.elapsed().as_millis();
+        let (success, output) = if result.is_success() {
+            (true, result.output().to_string())
+        } else {
+            (false, result.error_message().unwrap_or("").to_string())
+        };
+        crate::debug_log::agent_complete(
+            &ctx.working_directory,
+            "unknown",
+            ctx.cid,
+            &self.profile.name,
+            success,
+            &output,
+            duration_ms,
+        );
+        result
     }
 }
 
