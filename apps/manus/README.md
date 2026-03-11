@@ -5,51 +5,69 @@ This module implements the "planning with files" methodology using specialized a
 ## Agents
 
 ### Dispatcher
-- **Role**: Decide whether to create a new plan or execute an existing plan.
-- **Tools**: `planner`
-- **Behavior**: Checks for existing planning files (todos.md, findings.md, progress.md) and delegates to the planner agent.
+- **Role**: Route to planner — creates a new plan or continues an existing one.
+- **Tools**: `bash_exec`, `file_list`, `planner`
+- **Behavior**: Checks for existing planning files and delegates to planner.
 
 ### Planner
-- **Role**: Create, manage, and execute plans by delegating tasks to workers.
-- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `worker`
-- **Behavior**: Reads planning files to determine current phase and pending tasks, delegates tasks to workers with validation criteria, updates todos.md progress, monitors findings.md and progress.md, and removes stale findings.
+- **Role**: Orchestrate plan creation and execution via a strict FSM algorithm.
+- **Tools**: `file_read`, `file_write`, `file_edit`, `explorer`, `loop`
+- **Behavior**: Reads todos.md and the findings.md Summary each iteration. If no plan exists, calls explorer then writes todos.md. For each pending task, optionally calls explorer for context, then delegates to loop. Marks tasks done, archives completed phases to `todos_archive.md`.
+
+### Explorer
+- **Role**: Codebase research and findings collection.
+- **Tools**: `file_read`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `append_to_findings`
+- **Behavior**: Reads findings.md Summary before exploring. Appends new findings, then rewrites the Summary section with the 3–5 most critical facts.
+
+### Loop
+- **Role**: Wrap worker in a retry loop with external bash verification.
+- **Tools**: `bash_exec`, `worker`
+- **Behavior**: Builds a structured `## Task / ## Requirements / ## Validation` message for worker. Runs exit_condition bash check after every worker call — never trusts worker self-report. Retries up to max_iterations with failure context.
 
 ### Worker
-- **Role**: Execute specific tasks delegated by the planner.
-- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`
-- **Behavior**: Performs concrete implementation work, updates findings.md with discoveries, and logs detailed actions in progress.md. Does not modify todos.md.
+- **Role**: Execute a concrete task and update findings/progress.
+- **Tools**: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `append_to_findings`, `explorer`
+- **Behavior**: Receives a structured message with `## Task`, `## Requirements`, `## Validation` sections. Executes the task, appends to findings.md, keeps the Summary section current, and logs progress. Self-heals on errors before escalating.
 
-## Tools
+## Planning Files
 
-All standard file operations tools are included: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`.
+| File | Owner | Purpose |
+|------|-------|---------|
+| `todos.md` | planner | Phased task list (`- [ ]` / `- [x]`) |
+| `findings.md` | explorer, worker | Knowledge base with a concise `## Summary` at top |
+| `progress.md` | worker | Chronological action log |
+| `todos_archive.md` | planner | Completed phases moved here to keep todos.md small |
+
+### findings.md Summary section
+
+The `## Summary` section (3–5 bullets) at the top of findings.md is the only part planner reads. Explorer and worker must keep it current after every update. This caps planner's context cost regardless of project size.
 
 ## Workflow
 
-1. **Dispatcher** checks for existing planning files (todos.md, findings.md, progress.md).
-2. If planning files exist, delegates to **Planner** to continue execution. If not, delegates to **Planner** to create new plan.
-3. **Planner** reads planning files to determine current phase and pending tasks.
-4. **Planner** delegates each task to **Worker** with clear description, requirements, and validation criteria.
-5. **Worker** executes the task, updating `findings.md` and `progress.md`.
-6. **Planner** updates `todos.md` with progress and removes stale findings.
-7. Process repeats until all phases are complete.
+1. **Dispatcher** checks for planning files, delegates to **Planner**.
+2. **Planner** (STEP 1) reads todos.md + findings.md Summary + progress.md.
+3. If no plan: **Planner** calls **Explorer** → writes todos.md.
+4. **Planner** finds next `- [ ]` task, optionally calls **Explorer** for context.
+5. **Planner** calls **Loop** with description, exit_condition, requirements.
+6. **Loop** builds structured message → calls **Worker** → verifies with bash_exec → retries if needed.
+7. **Worker** implements task, updates findings.md (including Summary) and progress.md.
+8. **Planner** marks task `[x]`, archives completed phases, repeats.
 
-## Templates
+## Tools
 
-The `templates/` directory contains starter markdown files:
-- `todos.md`
-- `findings.md`
-- `progress.md`
-
-These follow the structure defined in the [planning-with-files](https://github.com/OthmanAdi/planning-with-files) methodology.
+Standard file operations: `file_read`, `file_write`, `file_edit`, `file_list`, `bash_exec`, `git_status`, `git_diff`, `append_to_findings`.
 
 ## Usage
 
-Assume a plan already exists in the project root. The planner can be invoked directly to manage execution.
+Invoke dispatcher with a goal:
+> "Build a REST API for user authentication."
 
-Example prompt: "Execute the current plan using the planner."
+Or invoke planner directly if planning files already exist:
+> "Execute the current plan."
 
-## Notes
+## Design Notes
 
-- Agents follow the 2-Action Rule: after every 2 view/browser/search operations, they update `findings.md`.
-- Errors are logged in both `todos.md` and `progress.md`.
-- Stale findings should be periodically removed by the planner.
+- **Context budget**: Planner reads only the findings.md `## Summary` (not the full file). Completed phases are archived. Templates are minimal.
+- **Instruction following**: Planner uses a numbered FSM algorithm — one action per step, no embedded conditionals.
+- **Tool call simplicity**: Worker accepts a single `description` field containing structured markdown. Loop constructs this string, eliminating multi-field tool call failures on small LLMs.
+- **Verification**: Loop always verifies completion via bash_exec — never via worker self-report.
