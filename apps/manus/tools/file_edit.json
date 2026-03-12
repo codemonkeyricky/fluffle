@@ -6,7 +6,7 @@
     "properties": {
       "path": {
         "type": "string",
-        "description": "Path to the file to edit"
+        "description": "Relative path to the file to edit (must be relative, not absolute)"
       },
       "old_string": {
         "type": "string",

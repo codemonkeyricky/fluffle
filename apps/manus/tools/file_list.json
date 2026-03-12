@@ -6,7 +6,7 @@
     "properties": {
       "path": {
         "type": "string",
-        "description": "Path to the directory to list (default: current directory)",
+        "description": "Relative path to the directory to list (must be relative, not absolute; default: current directory)",
         "default": "."
       }
     },

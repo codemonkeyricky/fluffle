@@ -6,7 +6,7 @@
     "properties": {
       "path": {
         "type": "string",
-        "description": "Path to the file to read"
+        "description": "Relative path to the file to read (must be relative, not absolute)"
       }
     },
     "required": ["path"]
