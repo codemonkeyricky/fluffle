@@ -22,7 +22,7 @@
   },
   "execution": {
     "type": "bash",
-    "command_template": "awk -v old='{{old_string}}' -v new='{{new_string}}' '{ while (i = index($0, old)) { $0 = substr($0, 1, i-1) new substr($0, i + length(old)) } print }' '{{path}}' > '{{path}}'.tmp && mv '{{path}}'.tmp '{{path}}'"
+    "command_template": "awk -v old='{{old_string}}' -v new='{{new_string}}' 'BEGIN{len=length(old)} { result=\"\"; s=$0; while ((i=index(s,old))>0) { result=result substr(s,1,i-1) new; s=substr(s,i+len) } print result s }' '{{path}}' > '{{path}}'.tmp && mv '{{path}}'.tmp '{{path}}'"
   },
   "secure_parameters": ["path"]
 }
