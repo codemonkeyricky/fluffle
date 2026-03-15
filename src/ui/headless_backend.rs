@@ -24,6 +24,8 @@ pub struct HeadlessUi {
     prompt: Option<String>,
     /// Working directory for tool execution.
     workdir: Option<PathBuf>,
+    /// Depth of the agent stack (1 = base agent only).
+    stack_depth: usize,
 }
 
 impl HeadlessUi {
@@ -68,6 +70,7 @@ impl HeadlessUi {
             config,
             prompt,
             workdir,
+            stack_depth: 1,
         })
     }
 
@@ -179,13 +182,17 @@ impl Ui for HeadlessUi {
                     println!("\x1b[90mThinking: {}\x1b[0m", text);
                 }
                 AgentToUi::Response(text) => {
-                    final_response = Some(text);
-                    break;
+                    if self.stack_depth == 1 {
+                        final_response = Some(text);
+                        break;
+                    }
                 }
                 AgentToUi::Error(text) => {
-                    eprintln!("{}", text);
-                    final_response = Some(text);
-                    break;
+                    if self.stack_depth == 1 {
+                        eprintln!("{}", text);
+                        final_response = Some(text);
+                        break;
+                    }
                 }
                 AgentToUi::TokenUsage(usage) => {
                     println!(
@@ -203,10 +210,11 @@ impl Ui for HeadlessUi {
                         "\x1b[90mSpawning child agent {}: {}\x1b[0m",
                         name, description
                     );
-                    // Inline execution for headless mode
+                    self.stack_depth += 1;
                     let result = self
                         .spawn_child_inline(name, description, system_prompt)
                         .await;
+                    self.stack_depth -= 1;
                     let _ = result_tx.send(result);
                 }
             }

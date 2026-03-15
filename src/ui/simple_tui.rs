@@ -117,12 +117,16 @@ pub struct SimpleTui {
     /// Agent stack display string (e.g., "generalist -> explorer").
     /// Computed from stack.
     agent_type: String,
+    /// Whether to exit automatically when the base agent completes (headless mode).
+    headless: bool,
+    /// Whether the run loop should exit on the next iteration.
+    should_exit: bool,
 }
 
 impl SimpleTui {
     /// Create a new simple terminal UI backend.
     /// Sets up terminal, creates channels, spawns agent thread.
-    pub async fn new(config: Config, initial_prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
+    pub async fn new(config: Config, headless: bool, initial_prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
         // Setup terminal
         let guard = TerminalGuard::setup()?;
 
@@ -180,6 +184,8 @@ impl SimpleTui {
             provider,
             token_usage: TokenUsage::default(),
             agent_type,
+            headless,
+            should_exit: false,
         };
 
         if let Some(prompt) = initial_prompt {
@@ -431,6 +437,9 @@ impl Ui for SimpleTui {
             if let Some(msg) = msg_result {
                 self.handle_incoming_message(msg).await?;
             }
+            if self.should_exit {
+                break;
+            }
         }
 
         // Send shutdown signal to agent thread
@@ -565,6 +574,9 @@ impl SimpleTui {
                     }
                     // Clean up popped agent (dropped)
                     drop(popped);
+                } else if self.headless {
+                    // Base agent completed in headless mode — schedule exit after logging.
+                    self.should_exit = true;
                 }
                 // Always log the response/error
                 self.push_agent_message(msg);

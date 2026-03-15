@@ -33,7 +33,7 @@ pub async fn create_ui(
             Ok(Box::new(ui))
         }
         false => {
-            let ui = simple_tui::SimpleTui::new(config, prompt, workdir).await?;
+            let ui = simple_tui::SimpleTui::new(config, headless, prompt, workdir).await?;
             Ok(Box::new(ui))
         }
     }
