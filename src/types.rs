@@ -8,6 +8,8 @@ pub struct ToolContext {
     pub permissions: Vec<String>,
     pub agent_to_ui_tx: Option<mpsc::Sender<AgentToUi>>,
     pub cid: Option<u64>,
+    /// Name of the agent that owns this context, used for logging.
+    pub agent_name: Option<String>,
 }
 
 #[derive(Debug)]

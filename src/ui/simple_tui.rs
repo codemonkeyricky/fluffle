@@ -130,7 +130,11 @@ impl SimpleTui {
         let (agent_to_ui_tx, agent_to_ui_rx) = mpsc::channel(100);
 
         // Determine default profile based on app
-        let default_profile = "dispatcher".to_string();
+        let default_profile = if app_name::get_app_name() == "manus" {
+            "planner".to_string()
+        } else {
+            "dispatcher".to_string()
+        };
 
         // Clone config for spawning agent thread (spawn takes ownership)
         let config_clone = config.clone();

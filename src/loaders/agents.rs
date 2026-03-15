@@ -102,9 +102,11 @@ impl Tool for ProfileTool {
             return self.execute_inline(ctx, description_json).await;
         };
 
+        let parent_name = ctx.agent_name.as_deref().unwrap_or("unknown");
+
         crate::debug_log::agent_spawn(
             &ctx.working_directory,
-            "unknown",
+            parent_name,
             ctx.cid,
             &self.profile.name,
             &description_json,
@@ -136,14 +138,17 @@ impl Tool for ProfileTool {
         } else {
             (false, result.error_message().unwrap_or("").to_string())
         };
+        // Token counts not available in UI-spawned mode; agent_end in the child covers them.
         crate::debug_log::agent_complete(
             &ctx.working_directory,
-            "unknown",
+            parent_name,
             ctx.cid,
             &self.profile.name,
             success,
             &output,
             duration_ms,
+            0,
+            0,
         );
         result
     }
@@ -151,9 +156,11 @@ impl Tool for ProfileTool {
 
 impl ProfileTool {
     async fn execute_inline(&self, ctx: &ToolContext, description: String) -> ToolResult {
+        let parent_name = ctx.agent_name.as_deref().unwrap_or("unknown");
+
         crate::debug_log::agent_spawn(
             &ctx.working_directory,
-            "unknown",
+            parent_name,
             ctx.cid,
             &self.profile.name,
             &description,
@@ -183,6 +190,11 @@ impl ProfileTool {
             Err(e) => ToolResult::error(format!("Profile agent failed: {}", e)),
         };
         let duration_ms = start.elapsed().as_millis();
+        let tokens = agent.token_usage();
+        let (prompt_tokens, completion_tokens) = (
+            tokens.prompt_tokens.into(),
+            tokens.completion_tokens.into(),
+        );
         let (success, output) = if result.is_success() {
             (true, result.output().to_string())
         } else {
@@ -190,12 +202,14 @@ impl ProfileTool {
         };
         crate::debug_log::agent_complete(
             &ctx.working_directory,
-            "unknown",
+            parent_name,
             ctx.cid,
             &self.profile.name,
             success,
             &output,
             duration_ms,
+            prompt_tokens,
+            completion_tokens,
         );
         result
     }

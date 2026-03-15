@@ -39,6 +39,7 @@ impl Agent {
             permissions: Vec::new(),
             agent_to_ui_tx: None,
             cid: None,
+            agent_name: None,
         };
 
         // Create AI provider based on configuration
@@ -382,6 +383,7 @@ impl Agent {
 
     /// Set the agent's name.
     pub fn set_name(&mut self, name: String) {
+        self.context.agent_name = Some(name.clone());
         self.agent_name = Some(name);
     }
 
@@ -427,7 +429,7 @@ impl Agent {
     /// Tool execution errors are included in the conversation history, allowing
     /// the AI to see and respond to errors in subsequent iterations.
     pub async fn process(&mut self, user_message: &str) -> Result<String> {
-        // Log agent start with available tools
+        // Log agent start with available tools and config
         let tool_names: Vec<&str> = self.tools.iter().map(|t| t.name()).collect();
         crate::debug_log::agent_start(
             &self.context.working_directory,
@@ -435,6 +437,9 @@ impl Agent {
             self.cid,
             &tool_names,
             user_message,
+            &self.config.model,
+            self.config.temperature,
+            self.config.max_tool_iterations,
         );
 
         // Add user message to conversation history
@@ -447,7 +452,27 @@ impl Agent {
         loop {
             iteration += 1;
             if iteration > self.config.max_tool_iterations {
-                return Err(crate::error::Error::ToolIterationLimit(iteration));
+                let msg = format!(
+                    "FAILED: Agent exceeded iteration limit of {} tool calls without completing the task",
+                    self.config.max_tool_iterations
+                );
+                crate::debug_log::agent_error(
+                    &self.context.working_directory,
+                    self.agent_name.as_deref().unwrap_or("unknown"),
+                    self.cid,
+                    &format!("ToolIterationLimit({})", iteration),
+                    iteration,
+                );
+                crate::debug_log::agent_end(
+                    &self.context.working_directory,
+                    self.agent_name.as_deref().unwrap_or("unknown"),
+                    self.cid,
+                    &msg,
+                    iteration,
+                    self.token_usage.prompt_tokens.into(),
+                    self.token_usage.completion_tokens.into(),
+                );
+                return Ok(msg);
             }
 
             // Convert tools to AI tool definitions
@@ -480,7 +505,23 @@ impl Agent {
 
             // Check if we have a final response (no tool calls)
             if ai_response.tool_calls.is_empty() {
+                // If the response is empty, nudge the model to continue rather than
+                // silently exiting mid-loop (e.g. planner blanking out after a task).
+                if ai_response.content.trim().is_empty() {
+                    self.history.push(Message::assistant(&ai_response.content));
+                    self.history.push(Message::user("Please continue."));
+                    continue;
+                }
                 self.history.push(Message::assistant(&ai_response.content));
+                crate::debug_log::agent_end(
+                    &self.context.working_directory,
+                    self.agent_name.as_deref().unwrap_or("unknown"),
+                    self.cid,
+                    &ai_response.content,
+                    iteration,
+                    self.token_usage.prompt_tokens.into(),
+                    self.token_usage.completion_tokens.into(),
+                );
                 return Ok(ai_response.content);
             }
 
@@ -508,7 +549,7 @@ impl Agent {
             }
 
             // Execute all tool calls
-            let tool_results = self.execute_tool_calls(&ai_response.tool_calls).await;
+            let tool_results = self.execute_tool_calls(&ai_response.tool_calls, iteration).await;
 
             // Add tool results to history (including errors)
             // Model will see errors in next iteration and decide next steps
@@ -550,7 +591,11 @@ impl Agent {
     /// This method executes each tool call in sequence and returns a vector
     /// of tuples containing each tool call and its result.
     /// Tool messages are NOT added to conversation history; caller must add them.
-    async fn execute_tool_calls(&mut self, tool_calls: &[ToolCall]) -> Vec<(ToolCall, ToolResult)> {
+    async fn execute_tool_calls(
+        &mut self,
+        tool_calls: &[ToolCall],
+        iteration: u32,
+    ) -> Vec<(ToolCall, ToolResult)> {
         let mut results = Vec::new();
 
         for tool_call in tool_calls {
@@ -566,6 +611,7 @@ impl Agent {
                 self.agent_name.as_deref().unwrap_or("unknown"),
                 self.cid,
                 &tool_call.name,
+                iteration,
                 &tool_call.arguments,
             );
 
@@ -584,6 +630,7 @@ impl Agent {
                 self.agent_name.as_deref().unwrap_or("unknown"),
                 self.cid,
                 &tool_call.name,
+                iteration,
                 success,
                 &output,
                 duration_ms,
