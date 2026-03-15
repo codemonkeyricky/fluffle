@@ -122,7 +122,7 @@ pub struct SimpleTui {
 impl SimpleTui {
     /// Create a new simple terminal UI backend.
     /// Sets up terminal, creates channels, spawns agent thread.
-    pub async fn new(config: Config, workdir: Option<PathBuf>) -> Result<Self> {
+    pub async fn new(config: Config, initial_prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
         // Setup terminal
         let guard = TerminalGuard::setup()?;
 
@@ -165,7 +165,7 @@ impl SimpleTui {
         let model = config.model.clone();
         let provider = config.provider.clone();
 
-        Ok(Self {
+        let mut tui = Self {
             guard,
             stack,
             config,
@@ -180,7 +180,17 @@ impl SimpleTui {
             provider,
             token_usage: TokenUsage::default(),
             agent_type,
-        })
+        };
+
+        if let Some(prompt) = initial_prompt {
+            tui.push_log(tui.indented_line(vec![
+                Span::styled("> ", Style::default().fg(Color::Cyan)),
+                Span::raw(prompt.clone()),
+            ]));
+            let _ = tui.stack.current_tx().unwrap().send(UiToAgent::Request(prompt)).await;
+        }
+
+        Ok(tui)
     }
 
     /// Convert an agent message to styled lines and add them to log.
