@@ -21,6 +21,7 @@ pub mod agent_thread;
 pub mod agents;
 pub mod debug_log;
 pub mod ai;
+pub mod token_stats;
 pub mod app_name;
 pub mod config;
 pub mod error;

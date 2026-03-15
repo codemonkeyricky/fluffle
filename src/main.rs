@@ -13,6 +13,8 @@ struct Args {
     app: String,
     #[structopt(long, help = "Working directory for tool execution")]
     workdir: Option<PathBuf>,
+    #[structopt(long, help = "Record token usage per context and plot histogram on exit")]
+    token_stats: bool,
 }
 
 fn parse_args<I>(args: I) -> Args
@@ -24,6 +26,7 @@ where
     let mut prompt: Option<String> = None;
     let mut app = "coding".to_string();
     let mut workdir: Option<PathBuf> = None;
+    let mut token_stats = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -51,6 +54,9 @@ where
         } else if args[i] == "--headless" {
             headless = true;
             i += 1;
+        } else if args[i] == "--token-stats" {
+            token_stats = true;
+            i += 1;
         } else if args[i] == "-p" || args[i] == "--prompt" {
             if i + 1 < args.len() && !args[i + 1].starts_with('-') {
                 prompt = Some(args[i + 1].clone());
@@ -66,11 +72,12 @@ where
             println!("    nanocode [FLAGS]");
             println!();
             println!("FLAGS:");
-            println!("        --help        Prints help information");
-            println!("        --headless    Run in headless mode (stdout/stdin)");
-            println!("    -p, --prompt P    Submit prompt immediately on startup");
-            println!("        --app APP     App name (e.g., coding) [default: coding]");
-            println!("        --workdir DIR Working directory for tool execution");
+            println!("        --help         Prints help information");
+            println!("        --headless     Run in headless mode (stdout/stdin)");
+            println!("    -p, --prompt P     Submit prompt immediately on startup");
+            println!("        --app APP      App name (e.g., coding) [default: coding]");
+            println!("        --workdir DIR  Working directory for tool execution");
+            println!("        --token-stats  Record token usage per context and plot histogram on exit");
             std::process::exit(0);
         } else {
             i += 1;
@@ -82,6 +89,7 @@ where
         prompt,
         app,
         workdir,
+        token_stats,
     }
 }
 
@@ -115,7 +123,7 @@ async fn main() -> Result<()> {
     }
     let config = Config::load().await?;
 
-    let mut ui = create_ui(config, args.headless, args.prompt, args.workdir).await?;
+    let mut ui = create_ui(config, args.headless, args.prompt, args.workdir, args.token_stats).await?;
     ui.run().await
 }
 

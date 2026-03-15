@@ -4,6 +4,7 @@ use crate::app_name;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
+use crate::token_stats::TokenStatsRecorder;
 use crate::types::ToolResult;
 use crate::ui::agent_stack::{AgentStack, NEXT_CID};
 use crate::ui::bottom_pane::BottomPane;
@@ -32,6 +33,7 @@ use tokio::sync::{mpsc, oneshot};
 /// Guard that ensures terminal state is restored when dropped.
 struct TerminalGuard {
     terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
+    restored: bool,
 }
 
 impl TerminalGuard {
@@ -62,6 +64,7 @@ impl TerminalGuard {
 
         Ok(Self {
             terminal: Some(terminal),
+            restored: false,
         })
     }
 
@@ -70,8 +73,13 @@ impl TerminalGuard {
     }
 }
 
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
+impl TerminalGuard {
+    /// Explicitly restore the terminal. Idempotent — safe to call before drop.
+    fn restore(&mut self) {
+        if self.restored {
+            return;
+        }
+        self.restored = true;
         let _ = disable_raw_mode();
         if let Some(terminal) = &mut self.terminal {
             let _ = execute!(
@@ -83,6 +91,12 @@ impl Drop for TerminalGuard {
         } else {
             let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
         }
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        self.restore();
     }
 }
 
@@ -121,12 +135,14 @@ pub struct SimpleTui {
     headless: bool,
     /// Whether the run loop should exit on the next iteration.
     should_exit: bool,
+    /// Optional token statistics recorder (enabled by --token-stats flag).
+    token_stats: Option<TokenStatsRecorder>,
 }
 
 impl SimpleTui {
     /// Create a new simple terminal UI backend.
     /// Sets up terminal, creates channels, spawns agent thread.
-    pub async fn new(config: Config, headless: bool, initial_prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
+    pub async fn new(config: Config, headless: bool, initial_prompt: Option<String>, workdir: Option<PathBuf>, token_stats: Option<TokenStatsRecorder>) -> Result<Self> {
         // Setup terminal
         let guard = TerminalGuard::setup()?;
 
@@ -186,6 +202,7 @@ impl SimpleTui {
             agent_type,
             headless,
             should_exit: false,
+            token_stats,
         };
 
         if let Some(prompt) = initial_prompt {
@@ -217,6 +234,11 @@ impl SimpleTui {
             AgentToUi::SpawnChild { .. } => ("Spawning child agent: ", Color::Cyan),
             AgentToUi::TokenUsage(usage) => {
                 self.token_usage = usage.clone();
+                if let Some(stats) = &mut self.token_stats {
+                    if let Some(cid) = self.stack.current_cid() {
+                        stats.add_tokens(cid, usage.total_tokens);
+                    }
+                }
                 let text = format!(
                     "Tokens used: prompt: {}, completion: {}, total: {}",
                     usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
@@ -444,6 +466,14 @@ impl Ui for SimpleTui {
 
         // Send shutdown signal to agent thread
         let _ = self.send_to_agent(UiToAgent::Shutdown).await;
+
+        // Restore terminal before printing histogram so output is visible
+        self.guard.restore();
+
+        if let Some(stats) = &self.token_stats {
+            stats.save_and_plot();
+        }
+
         Ok(())
     }
 }

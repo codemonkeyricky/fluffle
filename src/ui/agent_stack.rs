@@ -178,6 +178,11 @@ impl AgentStack {
     pub fn is_base_agent_active(&self) -> bool {
         self.stack.len() == 1
     }
+
+    /// Get the CID of the currently active (top-of-stack) agent.
+    pub fn current_cid(&self) -> Option<u64> {
+        self.stack.last().map(|h| h.cid)
+    }
 }
 
 #[cfg(test)]

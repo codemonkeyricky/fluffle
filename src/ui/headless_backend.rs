@@ -4,6 +4,7 @@ use crate::app_name;
 use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
+use crate::token_stats::TokenStatsRecorder;
 use crate::types::ToolResult;
 use crate::ui::agent_stack::NEXT_CID;
 use crate::ui::ui_trait::Ui;
@@ -26,12 +27,16 @@ pub struct HeadlessUi {
     workdir: Option<PathBuf>,
     /// Depth of the agent stack (1 = base agent only).
     stack_depth: usize,
+    /// CID of the base agent (used for token stats recording).
+    base_cid: u64,
+    /// Optional token statistics recorder (enabled by --token-stats flag).
+    token_stats: Option<TokenStatsRecorder>,
 }
 
 impl HeadlessUi {
     /// Create a new headless UI backend.
     /// Creates channels and spawns agent thread with system prompt.
-    pub fn new(config: Config, prompt: Option<String>, workdir: Option<PathBuf>) -> Result<Self> {
+    pub fn new(config: Config, prompt: Option<String>, workdir: Option<PathBuf>, token_stats: Option<TokenStatsRecorder>) -> Result<Self> {
         // Determine profile based on app
         let profile_name = if app_name::get_app_name() == "plan-builder" {
             "task-agent".to_string()
@@ -71,6 +76,8 @@ impl HeadlessUi {
             prompt,
             workdir,
             stack_depth: 1,
+            base_cid: cid,
+            token_stats,
         })
     }
 
@@ -195,6 +202,9 @@ impl Ui for HeadlessUi {
                     }
                 }
                 AgentToUi::TokenUsage(usage) => {
+                    if let Some(stats) = &mut self.token_stats {
+                        stats.add_tokens(self.base_cid, usage.total_tokens);
+                    }
                     println!(
                         "Tokens used: prompt: {}, completion: {}, total: {}",
                         usage.prompt_tokens, usage.completion_tokens, usage.total_tokens
@@ -227,6 +237,10 @@ impl Ui for HeadlessUi {
 
         // Send shutdown signal
         let _ = self.send_to_agent(UiToAgent::Shutdown).await;
+
+        if let Some(stats) = &self.token_stats {
+            stats.save_and_plot();
+        }
 
         Ok(())
     }
