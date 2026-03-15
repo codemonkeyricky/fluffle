@@ -22,7 +22,7 @@
   },
   "execution": {
     "type": "bash",
-    "command_template": "awk -v old='{{old_string}}' -v new='{{new_string}}' 'BEGIN{len=length(old)} { result=\"\"; s=$0; while ((i=index(s,old))>0) { result=result substr(s,1,i-1) new; s=substr(s,i+len) } print result s }' '{{path}}' > '{{path}}'.tmp && mv '{{path}}'.tmp '{{path}}'"
+    "command_template": "python3 <<'PYEOF'\npath = '{{path}}'\nold = '''{{old_string}}'''\nnew = '''{{new_string}}'''\nimport sys\ncontent = open(path).read()\nresult = content.replace(old, new)\nif result == content and old:\n    sys.exit(1)\nopen(path, 'w').write(result)\nPYEOF"
   },
   "secure_parameters": ["path"]
 }
