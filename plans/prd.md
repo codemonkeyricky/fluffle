@@ -1,0 +1,6 @@
+- A2A support 
+- Parallel agent
+- Implement determinstic agent 
+- Implement exit criteria 
+- Implement add_to_findings tool
+- Implement read_from_findings tool

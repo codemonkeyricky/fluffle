@@ -1,0 +1,237 @@
+A2A Support Plan
+================
+
+Goal
+----
+Replace the in-process SpawnChild/AgentStack inter-agent mechanism with HTTP-based
+Agent-to-Agent (A2A) communication. When agent A forks agent B, A sends the request
+over HTTP (A2A tasks/send), and B receives it via its own A2A HTTP server. Each agent
+instance gets a dedicated port drawn from a pool, enabling up to N concurrent instances
+of the same profile (e.g. 10 workers).
+
+
+Architecture Overview
+---------------------
+
+Startup:
+  - Load all agent profiles from apps/<app>/agents/*.json
+  - For each profile, read its port_range from the a2a config block
+  - Initialise AgentRegistry with per-profile PortPools
+  - Start the TUI/headless UI as before (base agent still spawned normally)
+
+Fork (agent A calls agent B):
+  - ProfileTool::execute calls AgentRegistry::acquire_or_spawn("worker")
+  - Registry assigns a port from the worker pool, starts AgentServer on that port
+  - ProfileTool POSTs tasks/send to http://localhost:{port}
+  - AgentServer spawns a fresh agent instance (spawn_with_profile), processes request
+  - Response returned as A2A tasks/send reply
+  - ProfileTool returns ToolResult to agent A's conversation history
+  - Registry releases the port back to the pool
+
+Port layout (example):
+  planner:   3001       (single instance)
+  explorer:  3002       (single instance)
+  worker:    3100-3109  (up to 10 concurrent)
+
+
+Data Structures (src/a2a/)
+--------------------------
+
+mod.rs          - public re-exports
+registry.rs     - AgentRegistry, AgentInstance, AgentStatus
+port_pool.rs    - PortPool (acquire / release)
+server.rs       - AgentServer (axum HTTP handler for tasks/send and agent card)
+client.rs       - send_task(url, input) -> ToolResult  (HTTP POST helper)
+types.rs        - A2ARequest, A2AResponse, Task, Message, Part, TaskStatus (serde structs)
+
+
+Step 1 — A2A Types (src/a2a/types.rs)
+--------------------------------------
+Define serde structs matching the A2A JSON-RPC payload:
+
+  A2ARequest  { jsonrpc, id, method, params: TaskParams }
+  TaskParams  { id, session_id, message: A2AMessage }
+  A2AMessage  { role, parts: Vec<Part> }
+  Part        { kind ("text"), text }
+  A2AResponse { jsonrpc, id, result: Task }
+  Task        { id, status: TaskStatus, messages: Vec<A2AMessage> }
+  TaskStatus  { state ("submitted"|"working"|"completed"|"failed") }
+
+No changes to existing files in this step.
+
+
+Step 2 — PortPool (src/a2a/port_pool.rs)
+-----------------------------------------
+  pub struct PortPool { available: VecDeque<u16> }
+  impl PortPool {
+      pub fn new(range: RangeInclusive<u16>) -> Self
+      pub fn acquire(&mut self) -> Option<u16>
+      pub fn release(&mut self, port: u16)
+  }
+
+
+Step 3 — AgentRegistry (src/a2a/registry.rs)
+---------------------------------------------
+  pub enum AgentStatus { Idle, Busy, Done }
+
+  pub struct AgentInstance {
+      pub id: AgentId,          // Uuid or u64
+      pub profile: String,
+      pub port: u16,
+      pub url: String,          // "http://localhost:{port}"
+      pub status: AgentStatus,
+  }
+
+  pub struct AgentRegistry {
+      pools: HashMap<String, PortPool>,   // profile_name -> pool
+      instances: HashMap<AgentId, AgentInstance>,
+  }
+
+  impl AgentRegistry {
+      pub fn new(profiles: &[AgentProfile]) -> Self
+          // reads a2a.port_range from each profile to seed pools
+
+      pub async fn spawn(&mut self, profile: &str, config: Config, workdir: PathBuf) -> Result<AgentId>
+          // acquire port, start AgentServer on that port, register instance
+
+      pub fn acquire_instance(&mut self, profile: &str) -> Option<&AgentInstance>
+          // returns an Idle instance for the profile if one exists
+
+      pub fn mark_busy(&mut self, id: AgentId)
+      pub fn release_instance(&mut self, id: AgentId)
+          // marks Idle (pool mode) or Done + releases port (on-demand mode)
+  }
+
+AgentRegistry is wrapped as Arc<Mutex<AgentRegistry>> and stored in ToolContext.
+
+
+Step 4 — AgentServer (src/a2a/server.rs)
+-----------------------------------------
+Axum HTTP server bound to a single port. Two routes:
+
+  GET  /.well-known/agent.json  ->  agent_card_handler
+      Returns Agent Card JSON derived from AgentProfile:
+        { name, description, url, version: "1.0.0",
+          capabilities: { streaming: false },
+          skills: [{ id: profile.name, name: profile.name,
+                     description: profile.description }] }
+
+  POST /  ->  tasks_send_handler
+      1. Parse A2ARequest, extract message text from parts
+      2. Spawn fresh agent via spawn_with_profile (own history, own channels)
+      3. Send UiToAgent::Request(text)
+      4. Drain agent_to_ui_rx:
+           AgentToUi::Response(text) -> build completed Task, return JSON
+           AgentToUi::Error(e)       -> build failed Task, return JSON
+           _                         -> discard (ToolCall, Thinking, TokenUsage)
+
+  pub struct AgentServer {
+      profile_name: String,
+      config: Config,
+      workdir: PathBuf,
+  }
+
+  pub async fn serve(server: AgentServer, port: u16) -> Result<()>
+      // binds axum listener, serves until shutdown signal
+
+
+Step 5 — A2A Client (src/a2a/client.rs)
+-----------------------------------------
+  pub async fn send_task(url: &str, input: &str) -> Result<ToolResult>
+      // Builds A2ARequest with method "tasks/send"
+      // POSTs to url via reqwest
+      // Parses A2AResponse, extracts message text from completed Task
+      // Returns ToolResult::success(text) or ToolResult::error(reason)
+
+
+Step 6 — Agent Profile JSON (apps/*/agents/*.json)
+----------------------------------------------------
+Add optional a2a block to profiles that should be reachable over A2A:
+
+  {
+    "name": "worker",
+    "a2a": {
+      "port_range": [3100, 3109]
+    }
+  }
+
+  {
+    "name": "explorer",
+    "a2a": {
+      "port_range": [3002, 3002]
+    }
+  }
+
+Single-instance profiles use a range of one port.
+Profiles without an a2a block remain in-process only (no HTTP server started).
+
+Update AgentProfile struct (src/agents.rs):
+  pub a2a: Option<A2AProfileConfig>
+
+  pub struct A2AProfileConfig {
+      pub port_range: [u16; 2],
+  }
+
+
+Step 7 — ToolContext (src/types.rs)
+-------------------------------------
+Add registry handle:
+  pub registry: Option<Arc<Mutex<AgentRegistry>>>
+
+This allows any tool (not just ProfileTool) to spawn or query agents.
+
+
+Step 8 — ProfileTool (src/loaders/agents.rs)
+----------------------------------------------
+Replace SpawnChild mechanism with A2A client call:
+
+  Current:
+    send AgentToUi::SpawnChild { result_tx }
+    await oneshot result_rx
+
+  New:
+    let registry = ctx.registry.as_ref()...
+    let instance = registry.acquire_or_spawn(profile_name, ...)
+    let result = a2a::client::send_task(&instance.url, &input).await
+    registry.release_instance(instance.id)
+    return result
+
+acquire_or_spawn: if an Idle instance exists return it, else spawn a new one.
+
+
+Step 9 — Startup (src/main.rs or src/ui/mod.rs)
+-------------------------------------------------
+Before starting the TUI/headless UI:
+  1. Load profiles
+  2. Build AgentRegistry from profiles (reads port_range from a2a blocks)
+  3. Wrap in Arc<Mutex<AgentRegistry>>
+  4. Pass registry into ToolContext when constructing the base agent
+
+No pre-warming needed initially — instances are spawned on first use.
+
+
+Step 10 — Remove SpawnChild Infrastructure
+-------------------------------------------
+Once ProfileTool is using A2A client:
+  - Remove AgentToUi::SpawnChild variant from messaging.rs
+  - Remove UiToAgent::ChildResult variant from messaging.rs
+  - Remove SpawnChild handling from simple_tui.rs and headless_backend.rs
+  - AgentStack becomes display-only (tracks names/CIDs for UI breadcrumb)
+    or is removed entirely if the UI no longer needs it
+
+
+Dependencies to add (Cargo.toml)
+---------------------------------
+  axum = "0.7"
+  reqwest = { version = "0.12", features = ["json"] }
+  tower = "0.4"           (axum dep, may already be present)
+  uuid = { version = "1", features = ["v4"] }  (for AgentId, if not using u64)
+
+
+Out of Scope (future work)
+--------------------------
+  - Streaming responses (tasks/sendSubscribe via SSE)
+  - Pre-warmed worker pool (currently on-demand only)
+  - Cross-machine agents (remote URLs in profile a2a block)
+  - Authentication (API key / OAuth on AgentServer)
+  - Agent discovery beyond local registry
