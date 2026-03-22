@@ -37,11 +37,11 @@ impl HeadlessUi {
     /// Create a new headless UI backend.
     /// Creates channels and spawns agent thread with system prompt.
     pub fn new(config: Config, prompt: Option<String>, workdir: Option<PathBuf>, token_stats: Option<TokenStatsRecorder>) -> Result<Self> {
-        // Determine profile based on app
-        let profile_name = if app_name::get_app_name() == "plan-builder" {
-            "task-agent".to_string()
+        // Determine profile based on app (mirrors simple_tui.rs logic)
+        let profile_name = if app_name::get_app_name() == "manus" {
+            "planner".to_string()
         } else {
-            "generalist".to_string()
+            "dispatcher".to_string()
         };
 
         // Generate unique CID for this agent
