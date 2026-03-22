@@ -25,4 +25,15 @@ pub struct AgentProfile {
     /// If not provided, defaults to a simple description parameter
     #[serde(default)]
     pub tool_parameters: Option<Value>,
+
+    /// Optional A2A configuration for HTTP-based inter-agent communication
+    #[serde(default)]
+    pub a2a: Option<A2AConfig>,
+}
+
+/// A2A configuration block within an agent profile.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A2AConfig {
+    /// Port range [start, end] for this agent type's HTTP servers.
+    pub port_range: [u16; 2],
 }

@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 pub struct Agent {
     config: Config,
@@ -22,6 +22,7 @@ pub struct Agent {
     ui_to_agent_rx: Option<mpsc::Receiver<UiToAgent>>,
     system_prompt: Option<String>,
     token_usage: TokenUsage,
+    registry: Option<Arc<Mutex<crate::a2a::AgentRegistry>>>,
 }
 
 impl Agent {
@@ -56,6 +57,7 @@ impl Agent {
             ui_to_agent_rx: None,
             system_prompt: None,
             token_usage: TokenUsage::default(),
+            registry: None,
         })
     }
 
@@ -342,6 +344,7 @@ impl Agent {
             ui_to_agent_rx: None,
             system_prompt,
             token_usage: TokenUsage::default(),
+            registry: None,
         })
     }
 
@@ -366,6 +369,7 @@ impl Agent {
             ui_to_agent_rx: None,
             system_prompt: None,
             token_usage: TokenUsage::default(),
+            registry: None,
         })
     }
 
@@ -385,6 +389,11 @@ impl Agent {
     pub fn set_name(&mut self, name: String) {
         self.context.agent_name = Some(name.clone());
         self.agent_name = Some(name);
+    }
+
+    /// Set the A2A agent registry for spawning sub-agents via HTTP.
+    pub fn set_registry(&mut self, registry: Arc<Mutex<crate::a2a::AgentRegistry>>) {
+        self.registry = Some(registry);
     }
 
     /// Discover all tools registered via the plugin inventory.

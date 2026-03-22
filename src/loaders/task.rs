@@ -1,3 +1,4 @@
+use crate::a2a::types::A2AResponse;
 use crate::config::Config;
 use crate::messaging::AgentToUi;
 use crate::plugin::{Plugin, Tool};
@@ -71,8 +72,8 @@ impl Tool for TaskTool {
             return self.execute_inline(ctx, description, system_prompt).await;
         };
 
-        // Create oneshot channel for result
-        let (result_tx, result_rx) = oneshot::channel();
+        // Create oneshot channel for A2A result
+        let (result_tx, result_rx) = oneshot::channel::<A2AResponse>();
 
         // Send SpawnChild request to UI
         let spawn_msg = AgentToUi::SpawnChild {
@@ -85,10 +86,23 @@ impl Tool for TaskTool {
             return ToolResult::error(format!("Failed to send spawn request: {}", e));
         }
 
-        // Wait for child result
-        match result_rx.await {
-            Ok(result) => result,
-            Err(_) => ToolResult::error("Child agent result channel closed"),
+        // Wait for child A2A result and convert to ToolResult
+        let a2a = match result_rx.await {
+            Ok(response) => response,
+            Err(_) => return ToolResult::error("Child agent result channel closed"),
+        };
+        let state = a2a.result.status.state.as_str();
+        let text = a2a
+            .result
+            .messages
+            .first()
+            .and_then(|m| m.parts.first())
+            .map(|p| p.text.as_str())
+            .unwrap_or("");
+        if state == "completed" {
+            ToolResult::success(text)
+        } else {
+            ToolResult::error(text)
         }
     }
 }

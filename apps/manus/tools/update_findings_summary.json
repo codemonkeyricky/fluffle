@@ -1,0 +1,24 @@
+{
+  "name": "update_findings_summary",
+  "description": "Modify the Summary section of findings.md. action='replace': overwrite entire summary with content. action='append': add a new line at the end of the summary. action='remove': delete all lines whose text contains content (substring match).",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": ["replace", "append", "remove"],
+        "description": "replace: overwrite entire summary. append: add a line. remove: delete lines containing content."
+      },
+      "content": {
+        "type": "string",
+        "description": "For replace: full new summary text. For append: the line to add. For remove: substring to match against lines to delete."
+      }
+    },
+    "required": ["action", "content"]
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "printf '%s\\x00%s' '{{action}}' '{{content}}' | python3 -c \"\nimport sys\ndata = sys.stdin.read()\nnul = data.index('\\x00')\naction = data[:nul]\ncontent = data[nul+1:]\nfilename = 'findings.md'\ntry:\n    lines = open(filename).readlines()\nexcept FileNotFoundError:\n    lines = ['# Findings\\n', '## Summary\\n', '-\\n', '## Research Findings\\n', '-\\n', '## Technical Decisions\\n', '-\\n', '## Issues Encountered\\n', '-\\n']\nstart = None\nend = None\nfor i, line in enumerate(lines):\n    if line.rstrip('\\n') == '## Summary':\n        start = i\n    elif start is not None and line.startswith('## ') and end is None:\n        end = i\n        break\nif start is None:\n    ins = 1 if lines and lines[0].startswith('#') else 0\n    lines = lines[:ins] + ['## Summary\\n'] + lines[ins:]\n    start = ins\n    end = ins + 1\nif end is None:\n    end = len(lines)\nif action == 'replace':\n    lines = lines[:start+1] + [content.strip() + '\\n'] + lines[end:]\nelif action == 'append':\n    lines = lines[:end] + [content.strip() + '\\n'] + lines[end:]\nelif action == 'remove':\n    section = [l for l in lines[start+1:end] if content.strip() not in l]\n    lines = lines[:start+1] + section + lines[end:]\nopen(filename, 'w').writelines(lines)\nprint('Summary', action + 'd.')\n\""
+  },
+  "secure_parameters": []
+}

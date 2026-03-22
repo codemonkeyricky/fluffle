@@ -16,6 +16,7 @@
 //!
 //! For more details, see the individual modules.
 
+pub mod a2a;
 pub mod agent;
 pub mod agent_thread;
 pub mod agents;

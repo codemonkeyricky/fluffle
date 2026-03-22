@@ -1,0 +1,13 @@
+{
+  "name": "read_findings_summary",
+  "description": "Read the current Summary section from findings.md",
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  },
+  "execution": {
+    "type": "bash",
+    "command_template": "python3 -c \"\nimport sys\ntry:\n    lines = open('findings.md').readlines()\nexcept FileNotFoundError:\n    sys.exit(0)\nin_section = False\nresult = []\nfor line in lines:\n    s = line.rstrip('\\n')\n    if s == '## Summary':\n        in_section = True\n    elif in_section and s.startswith('## '):\n        break\n    elif in_section:\n        result.append(s)\nprint('\\n'.join(result))\n\""
+  }
+}

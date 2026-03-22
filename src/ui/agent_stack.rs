@@ -3,8 +3,8 @@
 //! This module provides a stack-based manager for handling multiple active agents
 //! where only the topmost agent receives UI events and sends responses.
 
+use crate::a2a::types::A2AResponse;
 use crate::messaging::{AgentToUi, UiToAgent};
-use crate::types::ToolResult;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{mpsc, oneshot};
 
@@ -21,10 +21,10 @@ pub struct AgentHandle {
     pub ui_to_agent_tx: mpsc::Sender<UiToAgent>,
     /// Receiver for agent-to-UI messages (UI receives agent responses from this).
     pub agent_to_ui_rx: mpsc::Receiver<AgentToUi>,
-    /// Optional sender for returning child result to parent agent.
+    /// Optional sender for returning child result to parent agent in A2A format.
     /// When this agent is a child spawned by a parent, this channel is used
     /// to send the final result back to the parent when the child completes.
-    pub child_result_tx: Option<oneshot::Sender<ToolResult>>,
+    pub child_result_tx: Option<oneshot::Sender<A2AResponse>>,
 }
 
 impl AgentHandle {
@@ -46,12 +46,12 @@ impl AgentHandle {
     }
 
     /// Set the child result sender for returning results to parent.
-    pub fn set_child_result_tx(&mut self, tx: oneshot::Sender<ToolResult>) {
+    pub fn set_child_result_tx(&mut self, tx: oneshot::Sender<A2AResponse>) {
         self.child_result_tx = Some(tx);
     }
 
     /// Take the child result sender, leaving None in its place.
-    pub fn take_child_result_tx(&mut self) -> Option<oneshot::Sender<ToolResult>> {
+    pub fn take_child_result_tx(&mut self) -> Option<oneshot::Sender<A2AResponse>> {
         self.child_result_tx.take()
     }
 }
@@ -86,7 +86,7 @@ impl AgentStack {
         tx: mpsc::Sender<UiToAgent>,
         rx: mpsc::Receiver<AgentToUi>,
         cid: Option<u64>,
-    ) -> oneshot::Receiver<ToolResult> {
+    ) -> oneshot::Receiver<A2AResponse> {
         let (result_tx, result_rx) = oneshot::channel();
         let mut handle = AgentHandle::new(name, tx, rx, cid);
         handle.set_child_result_tx(result_tx);
@@ -95,14 +95,14 @@ impl AgentStack {
     }
 
     /// Push a new agent onto the stack with a pre-existing result channel.
-    /// The result_tx will be used to send the child's result back to the parent.
+    /// The result_tx will be used to send the child's A2A response back to the parent.
     /// No receiver is returned because the caller already has the sender.
     pub fn push_with_result_tx(
         &mut self,
         name: String,
         tx: mpsc::Sender<UiToAgent>,
         rx: mpsc::Receiver<AgentToUi>,
-        result_tx: oneshot::Sender<ToolResult>,
+        result_tx: oneshot::Sender<A2AResponse>,
         cid: Option<u64>,
     ) {
         let mut handle = AgentHandle::new(name, tx, rx, cid);
@@ -113,7 +113,7 @@ impl AgentStack {
     /// Pop the top agent from the stack, returning it to the previous agent.
     /// If a result is provided, it will be sent to the parent via the child result channel.
     /// Returns the popped agent handle (if any) for cleanup.
-    pub fn pop(&mut self, result: Option<ToolResult>) -> Option<AgentHandle> {
+    pub fn pop(&mut self, result: Option<A2AResponse>) -> Option<AgentHandle> {
         let mut popped = self.stack.pop()?;
 
         // If we have a result and there's a parent to receive it, send it

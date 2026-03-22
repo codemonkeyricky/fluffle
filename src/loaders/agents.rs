@@ -1,3 +1,4 @@
+use crate::a2a::types::A2AResponse;
 use crate::agents::AgentProfile;
 use crate::config::Config;
 use crate::messaging::AgentToUi;
@@ -112,8 +113,8 @@ impl Tool for ProfileTool {
             &description_json,
         );
 
-        // Create oneshot channel for result
-        let (result_tx, result_rx) = oneshot::channel();
+        // Create oneshot channel for A2A result
+        let (result_tx, result_rx) = oneshot::channel::<A2AResponse>();
 
         // Send SpawnChild request to UI
         let spawn_msg = AgentToUi::SpawnChild {
@@ -126,11 +127,24 @@ impl Tool for ProfileTool {
             return ToolResult::error(format!("Failed to send spawn request: {}", e));
         }
 
-        // Wait for child result
+        // Wait for child A2A result
         let start = std::time::Instant::now();
-        let result = match result_rx.await {
-            Ok(result) => result,
-            Err(_) => ToolResult::error("Child agent result channel closed"),
+        let a2a = match result_rx.await {
+            Ok(response) => response,
+            Err(_) => return ToolResult::error("Child agent result channel closed"),
+        };
+        let state = a2a.result.status.state.as_str();
+        let text = a2a
+            .result
+            .messages
+            .first()
+            .and_then(|m| m.parts.first())
+            .map(|p| p.text.as_str())
+            .unwrap_or("");
+        let result = if state == "completed" {
+            ToolResult::success(text)
+        } else {
+            ToolResult::error(text)
         };
         let duration_ms = start.elapsed().as_millis();
         let (success, output) = if result.is_success() {

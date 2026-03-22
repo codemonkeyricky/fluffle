@@ -1,3 +1,4 @@
+use crate::a2a::types::{A2AMessage, A2AResponse, Part, Task, TaskStatus};
 use crate::agent::Agent;
 use crate::agent_thread::spawn_with_agent;
 use crate::app_name;
@@ -5,7 +6,6 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::token_stats::TokenStatsRecorder;
-use crate::types::ToolResult;
 use crate::ui::agent_stack::NEXT_CID;
 use crate::ui::ui_trait::Ui;
 use async_trait::async_trait;
@@ -96,13 +96,13 @@ impl HeadlessUi {
         }
     }
 
-    /// Spawn a child agent inline (headless mode).
+    /// Spawn a child agent inline (headless mode), returning an A2A response.
     async fn spawn_child_inline(
         &self,
         name: String,
         description: String,
         system_prompt: Option<String>,
-    ) -> ToolResult {
+    ) -> A2AResponse {
         // Generate unique CID for this agent
         let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
         // Try to create agent with profile first
@@ -113,9 +113,7 @@ impl HeadlessUi {
                     // Fall back to generic agent
                     match Agent::new(self.config.clone(), self.workdir.clone()) {
                         Ok(agent) => agent,
-                        Err(e) => {
-                            return ToolResult::error(format!("Failed to create agent: {}", e))
-                        }
+                        Err(e) => return headless_a2a_error(cid, format!("Failed to create agent: {}", e)),
                     }
                 }
             };
@@ -130,14 +128,29 @@ impl HeadlessUi {
                     subagent.set_name(name.clone());
                     agent = subagent;
                 }
-                Err(e) => return ToolResult::error(format!("Failed to set system prompt: {}", e)),
+                Err(e) => return headless_a2a_error(cid, format!("Failed to set system prompt: {}", e)),
             }
         }
 
         // Run the task
-        match agent.process(&description).await {
-            Ok(summary) => ToolResult::success(summary),
-            Err(e) => ToolResult::error(format!("Child agent failed: {}", e)),
+        let (state, text) = match agent.process(&description).await {
+            Ok(summary) => ("completed".to_string(), summary),
+            Err(e) => ("failed".to_string(), format!("Child agent failed: {}", e)),
+        };
+        A2AResponse {
+            jsonrpc: "2.0".to_string(),
+            id: cid.to_string(),
+            result: Task {
+                id: cid.to_string(),
+                status: TaskStatus { state },
+                messages: vec![A2AMessage {
+                    role: "agent".to_string(),
+                    parts: vec![Part {
+                        kind: "text".to_string(),
+                        text,
+                    }],
+                }],
+            },
         }
     }
 }
@@ -243,5 +256,25 @@ impl Ui for HeadlessUi {
         }
 
         Ok(())
+    }
+}
+
+fn headless_a2a_error(cid: u64, error: String) -> A2AResponse {
+    A2AResponse {
+        jsonrpc: "2.0".to_string(),
+        id: cid.to_string(),
+        result: Task {
+            id: cid.to_string(),
+            status: TaskStatus {
+                state: "failed".to_string(),
+            },
+            messages: vec![A2AMessage {
+                role: "agent".to_string(),
+                parts: vec![Part {
+                    kind: "text".to_string(),
+                    text: error,
+                }],
+            }],
+        },
     }
 }

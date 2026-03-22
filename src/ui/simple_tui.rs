@@ -1,3 +1,4 @@
+use crate::a2a::types::{A2AMessage, A2AResponse, Part, Task, TaskStatus};
 use crate::agent_thread::spawn_with_profile;
 use crate::ai::TokenUsage;
 use crate::app_name;
@@ -5,7 +6,6 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::messaging::{AgentToUi, UiToAgent};
 use crate::token_stats::TokenStatsRecorder;
-use crate::types::ToolResult;
 use crate::ui::agent_stack::{AgentStack, NEXT_CID};
 use crate::ui::bottom_pane::BottomPane;
 use crate::ui::event::{Event, EventHandler};
@@ -579,26 +579,35 @@ impl SimpleTui {
             AgentToUi::Response(ref text) | AgentToUi::Error(ref text) => {
                 let is_child = self.stack.len() > 1;
                 if is_child {
-                    // Child agent has completed
+                    // Child agent has completed — build A2A response payload
                     let success = matches!(msg, AgentToUi::Response(_));
-                    let error = if success { None } else { Some(text.clone()) };
-                    let output = text.clone();
-                    let result_text = text.clone();
-                    let result = if success {
-                        ToolResult::success(result_text)
-                    } else {
-                        ToolResult::error(result_text)
+                    let state = if success { "completed" } else { "failed" }.to_string();
+                    let child_cid = self.stack.current_cid().unwrap_or(0);
+                    let a2a_result = A2AResponse {
+                        jsonrpc: "2.0".to_string(),
+                        id: child_cid.to_string(),
+                        result: Task {
+                            id: child_cid.to_string(),
+                            status: TaskStatus { state },
+                            messages: vec![A2AMessage {
+                                role: "agent".to_string(),
+                                parts: vec![Part {
+                                    kind: "text".to_string(),
+                                    text: text.clone(),
+                                }],
+                            }],
+                        },
                     };
-                    // Pop the child from stack, sending result to parent via oneshot
-                    let popped = self.stack.pop(Some(result));
+                    // Pop the child from stack, sending A2A result to parent via oneshot
+                    let popped = self.stack.pop(Some(a2a_result));
                     // Update UI agent type after pop
                     self.update_agent_type_from_stack();
                     // Also need to send ChildResult to parent agent via its UI channel
                     if let Some(parent_tx) = self.stack.current_tx() {
                         let child_result = UiToAgent::ChildResult {
                             success,
-                            output,
-                            error,
+                            output: text.clone(),
+                            error: if success { None } else { Some(text.clone()) },
                         };
                         let _ = parent_tx.send(child_result).await;
                     }
@@ -629,7 +638,7 @@ impl SimpleTui {
         name: String,
         description: String,
         system_prompt: Option<String>,
-        result_tx: oneshot::Sender<ToolResult>,
+        result_tx: oneshot::Sender<A2AResponse>,
     ) -> Result<()> {
         // Generate unique CID for this agent
         let cid = NEXT_CID.fetch_add(1, Ordering::Relaxed);
@@ -644,7 +653,7 @@ impl SimpleTui {
                             match agent.with_system_prompt(Some(prompt)) {
                                 Ok(subagent) => agent = subagent,
                                 Err(e) => {
-                                    let _ = result_tx.send(ToolResult::error(e.to_string()));
+                                    let _ = result_tx.send(a2a_error(cid, e.to_string()));
                                     return Ok(());
                                 }
                             }
@@ -652,7 +661,7 @@ impl SimpleTui {
                         agent
                     }
                     Err(e) => {
-                        let _ = result_tx.send(ToolResult::error(e.to_string()));
+                        let _ = result_tx.send(a2a_error(cid, e.to_string()));
                         return Ok(());
                     }
                 }
@@ -683,10 +692,10 @@ impl SimpleTui {
                 if let Some(mut popped_handle) = self.stack.pop(None) {
                     // Get the result channel back from the popped handle
                     if let Some(result_tx) = popped_handle.take_child_result_tx() {
-                        let _ = result_tx.send(ToolResult::error(format!(
-                            "Failed to send request to child agent: {}",
-                            e
-                        )));
+                        let _ = result_tx.send(a2a_error(
+                            cid,
+                            format!("Failed to send request to child agent: {}", e),
+                        ));
                     }
                     // Dropping popped_handle will close channels, causing agent thread to exit
                 }
@@ -698,5 +707,26 @@ impl SimpleTui {
         self.update_agent_type_from_stack();
 
         Ok(())
+    }
+}
+
+/// Build a failed A2A response for the given CID and error message.
+fn a2a_error(cid: u64, error: String) -> A2AResponse {
+    A2AResponse {
+        jsonrpc: "2.0".to_string(),
+        id: cid.to_string(),
+        result: Task {
+            id: cid.to_string(),
+            status: TaskStatus {
+                state: "failed".to_string(),
+            },
+            messages: vec![A2AMessage {
+                role: "agent".to_string(),
+                parts: vec![Part {
+                    kind: "text".to_string(),
+                    text: error,
+                }],
+            }],
+        },
     }
 }

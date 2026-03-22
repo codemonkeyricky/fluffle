@@ -3,6 +3,7 @@
 //! This module defines the message types sent between the UI thread and the
 //! agent thread, enabling clean separation and queuing of requests/responses.
 
+use crate::a2a::types::A2AResponse;
 use crate::ai::TokenUsage;
 use tokio::sync::oneshot;
 
@@ -47,7 +48,7 @@ pub enum AgentToUi {
         description: String,
         /// Optional custom system prompt for the child agent.
         system_prompt: Option<String>,
-        /// Channel to send the child's result back to the parent agent.
-        result_tx: oneshot::Sender<crate::types::ToolResult>,
+        /// Channel to send the child's result back to the parent agent in A2A format.
+        result_tx: oneshot::Sender<A2AResponse>,
     },
 }
