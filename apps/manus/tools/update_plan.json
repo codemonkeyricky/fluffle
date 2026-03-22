@@ -1,36 +1,45 @@
 {
   "name": "update_plan",
-  "description": "Create or revise the task plan in todos.md. action='create': write a new plan from scratch. action='revise': replace a failed task with smaller tasks and record what was tried, so the plan preserves a history of failed approaches.",
+  "description": "Update the plan (todos.md) or record a finding (findings.md). target='plan': create or revise the task plan. target='findings': append a fact or discovery to findings.md.",
   "parameters": {
     "type": "object",
     "properties": {
+      "target": {
+        "type": "string",
+        "enum": ["plan", "findings"],
+        "description": "plan: operate on todos.md. findings: append content to findings.md."
+      },
       "action": {
         "type": "string",
         "enum": ["create", "revise"],
-        "description": "create: write new todos.md content. revise: replace a failed task with replacement tasks and append a failure record."
+        "description": "(target=plan) create: write new todos.md. revise: replace a failed task with replacement tasks and record the failure."
       },
       "plan": {
         "type": "string",
-        "description": "(action=create) Full todos.md content to write."
+        "description": "(target=plan, action=create) Full todos.md content to write."
       },
       "failed_task": {
         "type": "string",
-        "description": "(action=revise) Text of the failed task as it appears after '- [ ]' in todos.md."
+        "description": "(target=plan, action=revise) Text of the failed task as it appears after '- [ ]' in todos.md."
       },
       "tried": {
         "type": "string",
-        "description": "(action=revise) What was attempted and why it failed. Recorded as a '- ✗' line in the plan so future iterations do not repeat it."
+        "description": "(target=plan, action=revise) What was attempted and why it failed — recorded as a '- ✗' line in the plan."
       },
       "replacement_tasks": {
         "type": "string",
-        "description": "(action=revise) Newline-separated replacement tasks to insert before the failure record. Include '[decomposed] ' prefix where appropriate."
+        "description": "(target=plan, action=revise) Newline-separated replacement tasks to insert. Include '[decomposed] ' prefix where appropriate."
+      },
+      "content": {
+        "type": "string",
+        "description": "(target=findings) The fact or discovery to record."
       }
     },
-    "required": ["action"]
+    "required": ["target"]
   },
   "execution": {
     "type": "bash",
-    "command_template": "printf '%s\\x00%s\\x00%s\\x00%s\\x00%s' '{{action}}' '{{plan}}' '{{failed_task}}' '{{tried}}' '{{replacement_tasks}}' | python3 -c \"\nimport sys, re\ndata = sys.stdin.read()\nparts = data.split('\\x00')\naction = parts[0] if len(parts) > 0 else ''\nplan = parts[1] if len(parts) > 1 else ''\nfailed_task = parts[2] if len(parts) > 2 else ''\ntried = parts[3] if len(parts) > 3 else ''\nreplacement_tasks = parts[4] if len(parts) > 4 else ''\nif action == 'create':\n    open('todos.md', 'w').write(plan.strip() + '\\n')\n    print('Plan created.')\nelif action == 'revise':\n    try:\n        lines = open('todos.md').readlines()\n    except FileNotFoundError:\n        print('todos.md not found', file=sys.stderr)\n        sys.exit(1)\n    target = failed_task.strip()\n    idx = None\n    for i, line in enumerate(lines):\n        if line.strip().startswith('- [ ]') and target in line:\n            idx = i\n            break\n    if idx is None:\n        print('Task not found: ' + target, file=sys.stderr)\n        sys.exit(1)\n    task_text = re.sub(r'^-\\s*\\[.\\]\\s*', '', lines[idx].strip())\n    new_lines = []\n    for task in replacement_tasks.strip().split('\\n'):\n        task = task.strip()\n        if task:\n            new_lines.append('- [ ] ' + task + '\\n')\n    new_lines.append('- \\u2717 ' + task_text + ' \\u2014 ' + tried.strip() + '\\n')\n    lines = lines[:idx] + new_lines + lines[idx+1:]\n    open('todos.md', 'w').writelines(lines)\n    print('Plan revised: ' + str(len(new_lines)-1) + ' replacement task(s) added, failure recorded.')\nelse:\n    print('Unknown action: ' + action, file=sys.stderr)\n    sys.exit(1)\n\""
+    "command_template": "printf '%s\\x00%s\\x00%s\\x00%s\\x00%s\\x00%s\\x00%s' '{{target}}' '{{action}}' '{{plan}}' '{{failed_task}}' '{{tried}}' '{{replacement_tasks}}' '{{content}}' | python3 -c \"\nimport sys, re\ndata = sys.stdin.read()\nparts = data.split('\\x00')\ntarget = parts[0] if len(parts) > 0 else ''\naction = parts[1] if len(parts) > 1 else ''\nplan = parts[2] if len(parts) > 2 else ''\nfailed_task = parts[3] if len(parts) > 3 else ''\ntried = parts[4] if len(parts) > 4 else ''\nreplacement_tasks = parts[5] if len(parts) > 5 else ''\ncontent = parts[6] if len(parts) > 6 else ''\nif target == 'findings':\n    with open('findings.md', 'a') as f:\n        f.write('- ' + content.strip() + '\\n')\n    print('Finding recorded.')\nelif target == 'plan':\n    if action == 'create':\n        open('todos.md', 'w').write(plan.strip() + '\\n')\n        print('Plan created.')\n    elif action == 'revise':\n        try:\n            lines = open('todos.md').readlines()\n        except FileNotFoundError:\n            print('todos.md not found', file=sys.stderr)\n            sys.exit(1)\n        target_task = failed_task.strip()\n        idx = None\n        for i, line in enumerate(lines):\n            if line.strip().startswith('- [ ]') and target_task in line:\n                idx = i\n                break\n        if idx is None:\n            print('Task not found: ' + target_task, file=sys.stderr)\n            sys.exit(1)\n        task_text = re.sub(r'^-\\s*\\[.\\]\\s*', '', lines[idx].strip())\n        new_lines = []\n        for task in replacement_tasks.strip().split('\\n'):\n            task = task.strip()\n            if task:\n                new_lines.append('- [ ] ' + task + '\\n')\n        new_lines.append('- \\u2717 ' + task_text + ' \\u2014 ' + tried.strip() + '\\n')\n        lines = lines[:idx] + new_lines + lines[idx+1:]\n        open('todos.md', 'w').writelines(lines)\n        print('Plan revised: ' + str(len(new_lines)-1) + ' replacement task(s) added, failure recorded.')\n    else:\n        print('Unknown action: ' + action, file=sys.stderr)\n        sys.exit(1)\nelse:\n    print('Unknown target: ' + target, file=sys.stderr)\n    sys.exit(1)\n\""
   },
   "secure_parameters": []
 }
